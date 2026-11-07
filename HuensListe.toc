@@ -2,8 +2,9 @@
 ## Title: |cffcc2222Huens Liste|r
 ## Notes: Shared kill-on-sight list for you and your friends. Marks KOS players on their nameplates and syncs the list in-game.
 ## Author: Artur
-## Version: 1.2.0
+## Version: 1.2.1
 ## SavedVariables: HuensListeDB
+## X-Curse-Project-ID: 1789759
 ## IconTexture: Interface\TargetingFrame\UI-RaidTargetingIcon_8
 ## AddonCompartmentFunc: HuensListe_OnAddonCompartmentClick
 ## AddonCompartmentFuncOnEnter: HuensListe_OnAddonCompartmentEnter

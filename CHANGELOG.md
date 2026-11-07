@@ -1,5 +1,8 @@
 # Huens Liste
 
+## v1.2.1
+- First automatic release from GitHub (no gameplay changes)
+
 ## v1.2.0
 - Support for WoW Forever's two-part, realmless names ("First Last")
 - Fixed sync: names no longer lose their surname when shared with friends
