@@ -29,9 +29,10 @@ function Find-AddOnsFolder {
         try {
             $p = (Get-ItemProperty -Path $key -ErrorAction Stop).InstallPath
             if ($p) {
-                # InstallPath usually points at a game-type folder like ...\_retail_\
-                $root = Split-Path ($p.TrimEnd('\')) -Parent
-                $candidates += (Join-Path $root "_forever_\Interface\AddOns")
+                # InstallPath points either at the WoW root or at a game-type folder like ...\_retail_\
+                $p = $p.TrimEnd('\')
+                $candidates += (Join-Path $p "_forever_\Interface\AddOns")
+                $candidates += (Join-Path (Split-Path $p -Parent) "_forever_\Interface\AddOns")
             }
         } catch { }
     }
