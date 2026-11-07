@@ -1,0 +1,360 @@
+-- Huens Liste: core data model, helpers, events
+local ADDON, HL = ...
+_G.HuensListe = HL
+
+HL.PREFIX = "HuensListe"
+HL.VERSION = (C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(ADDON, "Version")) or "1.0.0"
+HL.NUM_BUCKETS = 16
+HL.FS = "~"   -- field separator
+HL.RS = ";"   -- record separator
+
+local DEFAULTS = {
+    entries = {},   -- [lowercase "name-realm"] = { n = "Name-Realm", r = reason, b = addedBy, t = serverTime, d = deleted }
+    seen = {},      -- [key] = { t = time, z = zone, s = subzone, by = who }
+    settings = {
+        alerts = true,          -- raid-warning + chat when YOU see a KOS
+        sound = true,
+        shareSightings = true,  -- tell friends when you spot one
+        sightingAlerts = true,  -- show friends' sightings
+        syncGuild = true,
+        syncGroup = true,
+        channel = "",           -- optional private sync channel
+        channelPassword = "",
+        alertCooldown = 60,     -- seconds between alerts for the same player
+        plateOffsetY = 0,
+        plateScale = 1,
+    },
+}
+
+---------------------------------------------------------------------------
+-- Events
+---------------------------------------------------------------------------
+local eventFrame = CreateFrame("Frame")
+local handlers = {}
+
+function HL:On(event, fn)
+    if not handlers[event] then
+        handlers[event] = {}
+        eventFrame:RegisterEvent(event)
+    end
+    table.insert(handlers[event], fn)
+end
+
+eventFrame:SetScript("OnEvent", function(_, event, ...)
+    for _, fn in ipairs(handlers[event]) do fn(...) end
+end)
+
+HL.listeners = {}
+function HL:OnChange(fn) table.insert(self.listeners, fn) end
+function HL:Fire() for _, fn in ipairs(self.listeners) do fn() end end
+
+---------------------------------------------------------------------------
+-- Helpers
+---------------------------------------------------------------------------
+function HL:Print(...)
+    print("|cffcc2222Huens Liste:|r", ...)
+end
+
+-- Midnight-era "secret values": never compare or index with them.
+local issecret = _G.issecretvalue
+function HL.IsSecret(v)
+    return issecret ~= nil and v ~= nil and issecret(v) == true
+end
+
+function HL.PlaySoundSafe(id)
+    if id then pcall(PlaySound, id, "Master") end
+end
+
+function HL.Hash(s)
+    local h = 5381
+    for i = 1, #s do h = (h * 33 + s:byte(i)) % 4294967296 end
+    return h
+end
+
+function HL.MyRealm()
+    local r = GetNormalizedRealmName and GetNormalizedRealmName()
+    if not r or r == "" then r = (GetRealmName() or ""):gsub("%s", "") end
+    return r
+end
+
+function HL.Clean(s, maxLen)
+    s = tostring(s or "")
+    s = s:gsub("[~;|\r\n\t]", " ")
+    s = strtrim(s)
+    if maxLen and #s > maxLen then
+        s = s:sub(1, maxLen):gsub("[\192-\255][\128-\191]*$", "")
+    end
+    return s
+end
+
+-- WoW Forever is realmless and every character has a two-word name ("First Last"),
+-- unique per region. We detect that from our own name and then identify players
+-- by their full two-word name only, never by realm.
+function HL.IsRealmless()
+    if HL.realmless == nil then
+        local ok, n = pcall(UnitName, "player")
+        if ok and n and not HL.IsSecret(n) and n ~= "" and n ~= UNKNOWNOBJECT then
+            HL.realmless = n:find(" ", 1, true) ~= nil
+        end
+    end
+    return HL.realmless == true
+end
+
+local function capitalizeWords(s)
+    return (s:gsub("(%S)(%S*)", function(a, b) return a:upper() .. b:lower() end))
+end
+
+-- Forever: "illmindof nepho" / "Illmindof Nepho-Whatever" -> "Illmindof Nepho"
+-- Classic-style: "gankboy" / "Gankboy-Some Realm" -> "Gankboy-SomeRealm"
+function HL.NormalizeName(input)
+    if type(input) ~= "string" or HL.IsSecret(input) then return end
+    input = strtrim(input):gsub("%s+", " ")
+    if input == "" then return end
+    local name, realm = input:match("^(.-)%-([^%-]+)$")
+    name = strtrim(name or input)
+    if HL.IsRealmless() then
+        if not name:find(" ", 1, true) then return end -- Forever names are always two words
+        name = capitalizeWords(name)
+        return name
+    end
+    name = name:gsub("%s", "")
+    realm = realm and realm:gsub("%s", "") or HL.MyRealm()
+    if name == "" or realm == "" then return end
+    return capitalizeWords(name) .. "-" .. realm
+end
+
+function HL.Key(full) return full and full:lower() end
+
+function HL.ShortName(full)
+    local n, r = full:match("^(.-)%-(.+)$")
+    if n and r == HL.MyRealm() then return n end
+    return full
+end
+
+-- Full "Name-Realm" of a player unit, or nil (NPCs, secret values, ...)
+function HL.UnitFullName(unit)
+    if not unit or HL.IsSecret(unit) then return end
+    local okE, exists = pcall(UnitExists, unit)
+    if not okE or HL.IsSecret(exists) or not exists then return end
+    local okP, isPlayer = pcall(UnitIsPlayer, unit)
+    if not okP or HL.IsSecret(isPlayer) or not isPlayer then return end
+    local ok, name, realm = pcall(UnitName, unit)
+    if not ok or not name or HL.IsSecret(name) or HL.IsSecret(realm) then return end
+    if HL.IsRealmless() then return HL.NormalizeName(name) end
+    if not realm or realm == "" then realm = HL.MyRealm() end
+    return name .. "-" .. realm
+end
+
+-- Identity of an addon-message sender, in the same form as HL.me
+function HL.SenderId(sender)
+    if HL.IsRealmless() then
+        return HL.NormalizeName(sender) or sender
+    end
+    if not sender:find("-", 1, true) then sender = sender .. "-" .. HL.MyRealm() end
+    return sender
+end
+
+function HL.Ago(t)
+    local d = GetServerTime() - (t or 0)
+    if d < 60 then return "just now" end
+    if d < 3600 then return math.floor(d / 60) .. "m ago" end
+    if d < 86400 then return math.floor(d / 3600) .. "h ago" end
+    return math.floor(d / 86400) .. "d ago"
+end
+
+local lastFired = {}
+function HL:Throttled(key, secs)
+    local now = GetTime()
+    if lastFired[key] and now - lastFired[key] < secs then return true end
+    lastFired[key] = now
+    return false
+end
+
+---------------------------------------------------------------------------
+-- Data model (last-write-wins per player, tombstones for removals)
+---------------------------------------------------------------------------
+function HL:Get(full)
+    local e = full and self.db and self.db.entries[HL.Key(full)]
+    if e and not e.d then return e end
+end
+
+function HL:Count()
+    local n = 0
+    for _, e in pairs(self.db.entries) do if not e.d then n = n + 1 end end
+    return n
+end
+
+local function isNewer(a, b)
+    if not b then return true end
+    if a.t ~= b.t then return a.t > b.t end
+    local ad, bd = a.d and 1 or 0, b.d and 1 or 0
+    if ad ~= bd then return ad > bd end
+    return (a.b or "") > (b.b or "")
+end
+
+function HL:Merge(rec)
+    local key = HL.Key(rec.n)
+    if isNewer(rec, self.db.entries[key]) then
+        self.db.entries[key] = { n = rec.n, r = rec.r or "", b = rec.b or "", t = rec.t, d = rec.d or nil }
+        self.digestCache = nil
+        return true
+    end
+    return false
+end
+
+function HL:SetEntry(full, reason, deleted)
+    local key = HL.Key(full)
+    local cur = self.db.entries[key]
+    local ts = GetServerTime()
+    if cur and cur.t >= ts then ts = cur.t + 1 end
+    local e = { n = full, r = HL.Clean(reason, 80), b = HL.me or "", t = ts, d = deleted or nil }
+    self.db.entries[key] = e
+    self.digestCache = nil
+    self:Fire()
+    if self.BroadcastEntries then self:BroadcastEntries({ e }) end
+    return e
+end
+
+function HL:Add(full, reason)
+    full = HL.NormalizeName(full)
+    if not full then self:Print("Invalid name.") return end
+    if full == HL.me then self:Print("You can't put yourself on the list.") return end
+    reason = HL.Clean(reason, 80)
+    local existed = self:Get(full)
+    self:SetEntry(full, reason)
+    self:Print((existed and "Updated " or "Added ") .. "|cffff4040" .. full .. "|r"
+        .. (reason ~= "" and (" (" .. reason .. ")") or ""))
+end
+
+function HL:Remove(full)
+    full = HL.NormalizeName(full)
+    local cur = full and self:Get(full)
+    if not cur then self:Print("Not on the list: " .. tostring(full)) return end
+    self:SetEntry(cur.n, cur.r, true)
+    self:Print("Removed |cffff4040" .. cur.n .. "|r")
+end
+
+function HL.Serialize(e)
+    return table.concat({ e.n, e.r or "", e.b or "", tostring(e.t), e.d and "1" or "0" }, HL.FS)
+end
+
+function HL.Deserialize(s)
+    if not s or s == "" then return end
+    local n, r, b, t, d = strsplit(HL.FS, s)
+    t = tonumber(t)
+    n = HL.NormalizeName(n)
+    if not n or not t then return end
+    return { n = n, r = HL.Clean(r, 80), b = HL.Clean(b, 60), t = t, d = (d == "1") or nil }
+end
+
+-- Per-bucket digests let two clients find out cheaply which parts differ.
+function HL:BucketOf(key) return HL.Hash(key) % HL.NUM_BUCKETS end
+
+function HL:Digests()
+    if self.digestCache then return self.digestCache end
+    local buckets = {}
+    for i = 0, HL.NUM_BUCKETS - 1 do buckets[i] = {} end
+    for key, e in pairs(self.db.entries) do
+        local b = buckets[self:BucketOf(key)]
+        b[#b + 1] = key .. ":" .. e.t .. ":" .. (e.d and 1 or 0)
+    end
+    local out = {}
+    for i = 0, HL.NUM_BUCKETS - 1 do
+        table.sort(buckets[i])
+        out[#out + 1] = string.format("%08x", HL.Hash(table.concat(buckets[i], ",")))
+    end
+    self.digestCache = out
+    return out
+end
+
+function HL:EntriesInBuckets(set)
+    local list = {}
+    for key, e in pairs(self.db.entries) do
+        if set[self:BucketOf(key)] then list[#list + 1] = e end
+    end
+    return list
+end
+
+---------------------------------------------------------------------------
+-- Export / import (for sharing via Discord etc.)
+---------------------------------------------------------------------------
+function HL:ExportString()
+    local recs = {}
+    for _, e in pairs(self.db.entries) do
+        if not e.d then recs[#recs + 1] = HL.Serialize(e) end
+    end
+    table.sort(recs)
+    return "HL1:" .. table.concat(recs, HL.RS)
+end
+
+function HL:Import(text)
+    text = strtrim(text or "")
+    local body = text:match("^HL1:(.*)$")
+    if not body then self:Print("That doesn't look like a Huens Liste export string.") return end
+    local changed = 0
+    for rec in body:gmatch("[^;]+") do
+        local r = HL.Deserialize(strtrim(rec))
+        if r and self:Merge(r) then changed = changed + 1 end
+    end
+    self:Fire()
+    if self.ScheduleHello then self:ScheduleHello(2) end
+    self:Print("Import done: " .. changed .. " new/updated entries.")
+end
+
+---------------------------------------------------------------------------
+-- Init
+---------------------------------------------------------------------------
+local function copyDefaults(src, dst)
+    for k, v in pairs(src) do
+        if type(v) == "table" then
+            if type(dst[k]) ~= "table" then dst[k] = {} end
+            copyDefaults(v, dst[k])
+        elseif dst[k] == nil then
+            dst[k] = v
+        end
+    end
+end
+
+HL:On("ADDON_LOADED", function(name)
+    if name ~= ADDON then return end
+    HuensListeDB = HuensListeDB or {}
+    copyDefaults(DEFAULTS, HuensListeDB)
+    HL.db = HuensListeDB
+    HL.settings = HL.db.settings
+end)
+
+-- Re-key stored entries with the current name rules. Entries written by
+-- v1.0/1.1 under Forever lost the space in the name ("Illmindofnepho") and can't
+-- match anyone, so they are dropped.
+local function migrate()
+    local fresh, dropped = {}, 0
+    for _, e in pairs(HL.db.entries) do
+        local n = HL.NormalizeName(e.n)
+        if n and type(e.t) == "number" then
+            e.n = n
+            local k = HL.Key(n)
+            if not fresh[k] or e.t > fresh[k].t then fresh[k] = e end
+        else
+            dropped = dropped + 1
+        end
+    end
+    HL.db.entries = fresh
+    for k in pairs(HL.db.seen) do
+        if not fresh[k] then HL.db.seen[k] = nil end
+    end
+    HL.digestCache = nil
+    if dropped > 0 then
+        HL:Print("Cleaned up " .. dropped .. " broken entries from an older version (names without surname). Re-add them if needed.")
+    end
+end
+
+HL:On("PLAYER_LOGIN", function()
+    HL.realmless = nil
+    if HL.IsRealmless() then
+        HL.me = HL.NormalizeName(UnitName("player"))
+    else
+        HL.me = UnitName("player") .. "-" .. HL.MyRealm()
+    end
+    migrate()
+    HL:Print("loaded – " .. HL:Count() .. " players on the list. Type |cffffff00/hl|r to open.")
+end)

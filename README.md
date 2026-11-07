@@ -1,0 +1,45 @@
+# Huens Liste
+
+**A shared kill-on-sight list for you and your friends on PvP rulesets in WoW: Forever.**
+
+Getting ganked? Put the ganker on the list. Everyone in your group of friends gets the same list. The next time any of you comes across that player, a pulsing skull and **KILL ON SIGHT** appear above their nameplate, together with a raid-warning alert. Your friends also get a chat message saying where they were spotted.
+
+## Features
+- **Nameplate marker:** a skull and "KILL ON SIGHT" above every listed player
+- **Alerts:** a raid warning plus a sound when a listed player appears near you (nameplate, target or mouseover)
+- **Shared sightings:** your friends see "*Name* spotted in *Zone* by *You*"
+- **In-game sync:** the list syncs automatically over guild, party/raid or a private channel. Friends who were offline catch up as soon as they log in. No website, no external app.
+- **Right-click menu:** right-click any player and pick **Add to Huens Liste (KOS)** to add them with an optional reason
+- **List window:** add, remove, see who added whom and when each player was last seen
+- **Export/import:** share the whole list as a text string, e.g. on Discord
+- **Minimap button** and an addon compartment entry
+- Built for Forever's two-part names. No libraries needed.
+
+## Getting started
+1. Install the addon (everyone in your group needs it).
+2. **Same guild?** Nothing else to do. The list syncs over guild chat.
+   **Different guilds?** Everyone types the same `/hl channel <name> <password>` once.
+3. Right-click a ganker and pick **Add to Huens Liste (KOS)**.
+
+## Commands
+| Command | What it does |
+|---|---|
+| `/hl` | Open the list |
+| `/hl add Firstname Lastname [reason]` | Add a player |
+| `/hl target [reason]` | Add your current target |
+| `/hl del Firstname Lastname` | Remove a player |
+| `/hl sync` | Sync now |
+| `/hl channel <name> [password]` | Private sync channel (`/hl channel off` to stop) |
+| `/hl guild` / `group` / `alerts` / `sound` / `share` / `remote` `[on/off]` | Toggles |
+| `/hl minimap [on/off]` | Show/hide the minimap button |
+| `/hl offset <px>`, `/hl scale <0.5–2>` | Move/resize the nameplate skull |
+| `/hl export`, `/hl import` | Share the list by copy & paste |
+| `/hl debug` | Print sync traffic in chat (troubleshooting) |
+
+## How syncing works
+Addons can't reach the internet, so every copy of the list syncs peer-to-peer in-game. Adds and removals go out right away. Every 5 minutes, on login and when joining a group, clients compare a short checksum and exchange only what differs. When two people edit the same entry, the newest change wins.
+
+**Note:** everyone you sync with (guild, group, channel) can add and remove entries. In a large guild, turn off guild sync (`/hl guild off`) and use a private channel with a password.
+
+## Limitations
+WoW: Forever uses Midnight's addon restrictions, so addons can no longer read the combat log. Huens Liste detects players through **nameplates, target and mouseover** and turns on enemy nameplates at login.
