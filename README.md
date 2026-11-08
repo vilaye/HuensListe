@@ -12,6 +12,7 @@ Getting ganked? Put the ganker on the list. Everyone in your group of friends ge
 - **Right-click menu:** right-click any player and pick **Add to Huens Liste (KOS)** to add them with an optional reason
 - **List window:** add, remove, see who added whom and when each player was last seen
 - **Export/import:** share the whole list as a text string, e.g. on Discord
+- **Quality of Life tab:** a movable **Well Fed reminder** that shows up while you have no food buff
 - **Minimap button** and an addon compartment entry
 - Built for Forever's two-part names. No libraries needed.
 
@@ -32,6 +33,8 @@ Getting ganked? Put the ganker on the list. Everyone in your group of friends ge
 | `/hl channel <name> [password]` | Private sync channel (`/hl channel off` to stop) |
 | `/hl guild` / `group` / `alerts` / `sound` / `share` / `remote` `[on/off]` | Toggles |
 | `/hl minimap [on/off]` | Show/hide the minimap button |
+| `/hl wellfed [on/off]` | Well Fed reminder on/off (move it in the Quality of Life tab) |
+| `/hl buffs` | List your buffs (troubleshooting) |
 | `/hl offset <px>`, `/hl scale <0.5–2>` | Move/resize the nameplate skull |
 | `/hl export`, `/hl import` | Share the list by copy & paste |
 | `/hl debug` | Print sync traffic in chat (troubleshooting) |

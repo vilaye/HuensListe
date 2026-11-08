@@ -108,7 +108,7 @@ function HL:RefreshList()
     main.count:SetText(#list .. " on the list")
 end
 
-local function makeCheck(parent, label, key, anchor)
+local function makeCheck(parent, label, key, anchor, onChange)
     local cb = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
     cb:SetSize(24, 24)
     cb:SetPoint(unpack(anchor))
@@ -119,8 +119,61 @@ local function makeCheck(parent, label, key, anchor)
         t:SetText(label)
     end
     cb:SetScript("OnShow", function(self) self:SetChecked(HL.settings[key]) end)
-    cb:SetScript("OnClick", function(self) HL.settings[key] = self:GetChecked() and true or false end)
+    cb:SetScript("OnClick", function(self)
+        HL.settings[key] = self:GetChecked() and true or false
+        if onChange then onChange(HL.settings[key]) end
+    end)
     return cb
+end
+
+---------------------------------------------------------------------------
+-- Quality of Life tab
+---------------------------------------------------------------------------
+function HL:BuildQoLPage(parent)
+    local page = CreateFrame("Frame", nil, parent)
+    page:SetAllPoints()
+
+    local header = page:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    header:SetPoint("TOPLEFT", 20, -36)
+    header:SetText("Quality of Life")
+
+    -- Well Fed reminder
+    local section = page:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    section:SetPoint("TOPLEFT", 20, -72)
+    section:SetText("Well Fed reminder")
+
+    makeCheck(page, "Show a reminder when I'm not Well Fed", "wellFedReminder", { "TOPLEFT", 16, -90 },
+        function() HL:UpdateWellFed() end)
+
+    local desc = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    desc:SetPoint("TOPLEFT", 44, -116)
+    desc:SetWidth(520)
+    desc:SetJustifyH("LEFT")
+    desc:SetText("Shows \"You are not Well Fed!\" on screen while you have no food buff. Hidden while you are dead.")
+
+    local moveBtn = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+    moveBtn:SetSize(120, 22)
+    moveBtn:SetPoint("TOPLEFT", 44, -138)
+    local function refreshMoveText()
+        moveBtn:SetText(HL:IsWellFedUnlocked() and "Lock position" or "Move reminder")
+    end
+    moveBtn:SetScript("OnClick", function()
+        HL:SetWellFedUnlocked(not HL:IsWellFedUnlocked())
+        refreshMoveText()
+    end)
+
+    local resetBtn = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+    resetBtn:SetSize(120, 22)
+    resetBtn:SetPoint("LEFT", moveBtn, "RIGHT", 8, 0)
+    resetBtn:SetText("Reset position")
+    resetBtn:SetScript("OnClick", function() HL:ResetWellFedPosition() end)
+
+    page:SetScript("OnShow", refreshMoveText)
+    -- Leaving the window locks the reminder again
+    page:SetScript("OnHide", function()
+        if HL:IsWellFedUnlocked() then HL:SetWellFedUnlocked(false) end
+    end)
+    return page
 end
 
 local function createMain()
@@ -141,28 +194,32 @@ local function createMain()
     title:SetPoint("TOP", 0, -5)
     title:SetText("|cffcc2222Huens Liste|r – Kill on Sight")
 
-    main.count = main:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    -- Tab 1: KOS list
+    local kos = CreateFrame("Frame", nil, main)
+    kos:SetAllPoints()
+
+    main.count = kos:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     main.count:SetPoint("TOPRIGHT", -16, -32)
 
-    local l1 = main:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local l1 = kos:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     l1:SetPoint("TOPLEFT", 20, -32)
     l1:SetText("Full name (First Last)")
-    local l2 = main:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local l2 = kos:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     l2:SetPoint("TOPLEFT", 182, -32)
     l2:SetText("Reason")
 
-    local nameBox = CreateFrame("EditBox", nil, main, "InputBoxTemplate")
+    local nameBox = CreateFrame("EditBox", nil, kos, "InputBoxTemplate")
     nameBox:SetSize(150, 20)
     nameBox:SetPoint("TOPLEFT", 22, -46)
     nameBox:SetAutoFocus(false)
 
-    local reasonBox = CreateFrame("EditBox", nil, main, "InputBoxTemplate")
+    local reasonBox = CreateFrame("EditBox", nil, kos, "InputBoxTemplate")
     reasonBox:SetSize(220, 20)
     reasonBox:SetPoint("LEFT", nameBox, "RIGHT", 12, 0)
     reasonBox:SetAutoFocus(false)
     reasonBox:SetMaxLetters(80)
 
-    local addBtn = CreateFrame("Button", nil, main, "UIPanelButtonTemplate")
+    local addBtn = CreateFrame("Button", nil, kos, "UIPanelButtonTemplate")
     addBtn:SetSize(60, 22)
     addBtn:SetPoint("LEFT", reasonBox, "RIGHT", 8, 0)
     addBtn:SetText("Add")
@@ -174,7 +231,7 @@ local function createMain()
         nameBox:ClearFocus(); reasonBox:ClearFocus()
     end)
 
-    local tgtBtn = CreateFrame("Button", nil, main, "UIPanelButtonTemplate")
+    local tgtBtn = CreateFrame("Button", nil, kos, "UIPanelButtonTemplate")
     tgtBtn:SetSize(90, 22)
     tgtBtn:SetPoint("LEFT", addBtn, "RIGHT", 4, 0)
     tgtBtn:SetText("Add Target")
@@ -192,24 +249,24 @@ local function createMain()
 
     local headers = { { "Name", 16 }, { "Reason", 152 }, { "Added by", 348 }, { "Last seen", 442 } }
     for _, h in ipairs(headers) do
-        local fs = main:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        local fs = kos:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         fs:SetPoint("TOPLEFT", h[2], -78)
         fs:SetText(h[1])
     end
 
-    local scroll = CreateFrame("ScrollFrame", nil, main, "UIPanelScrollFrameTemplate")
+    local scroll = CreateFrame("ScrollFrame", nil, kos, "UIPanelScrollFrameTemplate")
     scroll:SetPoint("TOPLEFT", 12, -94)
     scroll:SetPoint("BOTTOMRIGHT", -32, 44)
     content = CreateFrame("Frame", nil, scroll)
     content:SetSize(540, 1)
     scroll:SetScrollChild(content)
 
-    makeCheck(main, "Alerts", "alerts", { "BOTTOMLEFT", 14, 12 })
-    makeCheck(main, "Sound", "sound", { "BOTTOMLEFT", 104, 12 })
-    makeCheck(main, "Share sightings", "shareSightings", { "BOTTOMLEFT", 190, 12 })
+    makeCheck(kos, "Alerts", "alerts", { "BOTTOMLEFT", 14, 12 })
+    makeCheck(kos, "Sound", "sound", { "BOTTOMLEFT", 104, 12 })
+    makeCheck(kos, "Share sightings", "shareSightings", { "BOTTOMLEFT", 190, 12 })
 
     local function bottomBtn(text, x, fn)
-        local b = CreateFrame("Button", nil, main, "UIPanelButtonTemplate")
+        local b = CreateFrame("Button", nil, kos, "UIPanelButtonTemplate")
         b:SetSize(72, 22)
         b:SetPoint("BOTTOMRIGHT", x, 12)
         b:SetText(text)
@@ -219,6 +276,37 @@ local function createMain()
     bottomBtn("Sync", -12, function() HL:SendHello(); HL:Print("Sync requested.") end)
     bottomBtn("Export", -88, function() HL:ShowExport() end)
     bottomBtn("Import", -164, function() HL:ShowImport() end)
+
+    -- Tab 2: Quality of Life
+    local qol = HL:BuildQoLPage(main)
+
+    -- Tabs below the window
+    local pages = { kos, qol }
+    local labels = { "KOS List", "Quality of Life" }
+    main.tabs = {}
+    local function selectTab(id)
+        for i, page in ipairs(pages) do page:SetShown(i == id) end
+        if PanelTemplates_SetTab then PanelTemplates_SetTab(main, id) end
+        main.selectedTab = id
+    end
+    for i, label in ipairs(labels) do
+        local tab = CreateFrame("Button", "HuensListeFrameTab" .. i, main, "PanelTabButtonTemplate")
+        tab:SetID(i)
+        tab:SetText(label)
+        if PanelTemplates_TabResize then PanelTemplates_TabResize(tab, 0) end
+        if i == 1 then
+            tab:SetPoint("TOPLEFT", main, "BOTTOMLEFT", 11, 2)
+        else
+            tab:SetPoint("LEFT", main.tabs[i - 1], "RIGHT", 3, 0)
+        end
+        tab:SetScript("OnClick", function(self)
+            PlaySound(SOUNDKIT.IG_CHARACTER_INFO_TAB)
+            selectTab(self:GetID())
+        end)
+        main.tabs[i] = tab
+    end
+    if PanelTemplates_SetNumTabs then PanelTemplates_SetNumTabs(main, #labels) end
+    selectTab(1)
 
     main:SetScript("OnShow", function() HL:RefreshList() end)
 end
@@ -348,6 +436,8 @@ local HELP = {
     "|cffffff00/hl guild, group, alerts, sound, share, remote [on/off]|r – toggles",
     "|cffffff00/hl offset <pixels>|r / |cffffff00/hl scale <0.5-2>|r – move/resize the nameplate skull",
     "|cffffff00/hl minimap [on/off]|r – show/hide the minimap button",
+    "|cffffff00/hl wellfed [on/off]|r – Well Fed reminder (move it in the Quality of Life tab)",
+    "|cffffff00/hl buffs|r – list your buffs (troubleshooting for the Well Fed check)",
     "|cffffff00/hl export|r / |cffffff00/hl import|r – share via copy & paste",
 }
 
@@ -432,6 +522,11 @@ SlashCmdList.HUENSLISTE = function(msg)
         if v then HL.settings.plateScale = math.min(2, math.max(0.5, v)) end
         HL:RefreshPlates()
         HL:Print("Nameplate scale: " .. HL.settings.plateScale)
+    elseif cmd == "wellfed" then
+        toggle("wellFedReminder", arg, "Well Fed reminder")
+        HL:UpdateWellFed()
+    elseif cmd == "buffs" then
+        HL:PrintBuffs()
     elseif cmd == "minimap" then
         if arg == "on" then HL.settings.minimapHide = false
         elseif arg == "off" then HL.settings.minimapHide = true
