@@ -1,14 +1,25 @@
-# Builds the addon zip and uploads it to CurseForge + GitHub Releases
-# whenever a version tag (e.g. v1.3.0) is pushed.
+# Releases Huens Liste to CurseForge + GitHub Releases.
+#
+# Every push to main checks the "## Version:" line in HuensListe.toc.
+# If there is no tag for that version yet, the workflow creates it (e.g. v1.4.0)
+# and packages/uploads the release. Pushes without a version bump do nothing.
+# Pushing a v* tag by hand still works too.
 name: Release
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -21,4 +32,24 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Tag new version from the .toc
+        id: version
+        run: |
+          version=$(grep -m1 '^## Version:' HuensListe.toc | sed 's/^## Version:[[:space:]]*//' | tr -d '\r[:space:]')
+          tag="v$version"
+          echo "Version in .toc: $version"
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            echo "Triggered by tag $GITHUB_REF_NAME"
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          elif git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "$tag is already released - nothing to do"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            git tag "$tag"
+            git push origin "$tag"
+            echo "Created $tag"
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: BigWigsMods/packager@v2
+        if: steps.version.outputs.release == 'true'
