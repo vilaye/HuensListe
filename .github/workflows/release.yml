@@ -1,9 +1,12 @@
 # Releases Huens Liste to CurseForge + GitHub Releases.
 #
 # Every push to main checks the "## Version:" line in HuensListe.toc.
-# If there is no tag for that version yet, the workflow creates it (e.g. v1.4.0)
-# and packages/uploads the release. Pushes without a version bump do nothing.
+# If that version has no tag yet, the workflow creates it (e.g. v1.4.0) and starts
+# a release run on that tag. Pushes without a version bump do nothing.
 # Pushing a v* tag by hand still works too.
+#
+# Why two runs: the packager refuses to build from a branch push whose commit
+# already carries a tag, so the actual packaging runs on the tag itself.
 name: Release
 
 on:
@@ -16,9 +19,10 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
-  group: release
+  group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -27,6 +31,7 @@ jobs:
     env:
       CF_API_KEY: ${{ secrets.CF_API_KEY }}
       GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -35,21 +40,31 @@ jobs:
       - name: Tag new version from the .toc
         id: version
         run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            echo "Running on tag $GITHUB_REF_NAME - packaging"
+            echo "package=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           version=$(grep -m1 '^## Version:' HuensListe.toc | sed 's/^## Version:[[:space:]]*//' | tr -d '\r[:space:]')
           tag="v$version"
           echo "Version in .toc: $version"
-          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
-            echo "Triggered by tag $GITHUB_REF_NAME"
-            echo "release=true" >> "$GITHUB_OUTPUT"
-          elif git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
-            echo "$tag is already released - nothing to do"
-            echo "release=false" >> "$GITHUB_OUTPUT"
-          else
+
+          if ! git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
             git tag "$tag"
             git push origin "$tag"
             echo "Created $tag"
-            echo "release=true" >> "$GITHUB_OUTPUT"
+          elif gh release view "$tag" >/dev/null 2>&1; then
+            echo "$tag is already released - nothing to do"
+            echo "package=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          else
+            echo "$tag exists but has no release yet"
           fi
 
+          gh workflow run release.yml --ref "$tag"
+          echo "Started release run for $tag"
+          echo "package=false" >> "$GITHUB_OUTPUT"
+
       - uses: BigWigsMods/packager@v2
-        if: steps.version.outputs.release == 'true'
+        if: steps.version.outputs.package == 'true'
