@@ -87,18 +87,30 @@ local function pack(kind, entries, send)
     if buf ~= kind then send(buf) end
 end
 
-function HL:BroadcastEntries(entries)
-    pack("A", entries, function(m) HL:Broadcast(m, "high") end)
+-- Message kinds per list. KOS keeps the original ones for compatibility.
+local KINDS = {
+    kos   = { A = "A", U = "U", H = "H", R = "R" },
+    avoid = { A = "a", U = "u", H = "h", R = "r" },
+}
+local KIND_INFO = {} -- "a" -> { list = "avoid", base = "A" }
+for list, m in pairs(KINDS) do
+    for base, k in pairs(m) do KIND_INFO[k] = { list = list, base = base } end
 end
 
-local function whisperEntries(entries, target)
-    pack("U", entries, function(m) HL:Whisper(m, target, "low") end)
+function HL:BroadcastEntries(entries, list)
+    pack(KINDS[list or "kos"].A, entries, function(m) HL:Broadcast(m, "high") end)
+end
+
+local function whisperEntries(entries, target, list)
+    pack(KINDS[list or "kos"].U, entries, function(m) HL:Whisper(m, target, "low") end)
 end
 
 function HL:SendHello(target)
     if not self.db then return end
-    local msg = "H" .. RS .. HL.VERSION .. RS .. table.concat(self:Digests(), ",")
-    if target then self:Whisper(msg, target, "high") else self:Broadcast(msg, "high") end
+    for _, list in ipairs(HL.LIST_ORDER) do
+        local msg = KINDS[list].H .. RS .. HL.VERSION .. RS .. table.concat(self:Digests(list), ",")
+        if target then self:Whisper(msg, target, "high") else self:Broadcast(msg, "high") end
+    end
 end
 
 local helloPending = false
@@ -234,7 +246,8 @@ local function noteSynced(n)
     syncCount = syncCount + n
     if syncTimer then return end
     syncTimer = C_Timer.NewTimer(5, function()
-        HL:Print("Synced " .. syncCount .. " entries from friends. " .. HL:Count() .. " players on the list.")
+        HL:Print(("Synced %d entries from friends. %d on the %s, %d on the %s."):format(syncCount,
+            HL:Count("kos"), HL.ListLabel("kos"), HL:Count("avoid"), HL.ListLabel("avoid")))
         syncCount, syncTimer = 0, nil
     end)
 end
@@ -272,8 +285,11 @@ HL:On("CHAT_MSG_ADDON", function(prefix, msg, channel, rawSender)
     local parts = { strsplit(RS, msg) }
     local kind = parts[1]
 
-    -- Anyone who talks to us has the addon. H, P and V carry the version.
-    local carriesVersion = (kind == "H" or kind == "P" or kind == "V")
+    local info = KIND_INFO[kind]
+    local base, list = info and info.base, info and info.list
+
+    -- Anyone who talks to us has the addon. Hellos, P and V carry the version.
+    local carriesVersion = (base == "H" or kind == "P" or kind == "V")
     HL:NotePeer(sender, carriesVersion and parts[2] or nil, channel)
 
     if kind == "P" then
@@ -281,22 +297,32 @@ HL:On("CHAT_MSG_ADDON", function(prefix, msg, channel, rawSender)
         answerPing(rawSender, sender)
     elseif kind == "V" then
         checkVersion(parts[2], sender)
-    elseif kind == "A" or kind == "U" then
+    elseif base == "A" or base == "U" then
         local changed = {}
         for i = 2, #parts do
             local rec = HL.Deserialize(parts[i])
-            if rec and HL:Merge(rec) then changed[#changed + 1] = rec end
+            if rec and HL:Merge(rec, list) then changed[#changed + 1] = rec end
         end
         if #changed == 0 then return end
         HL:Fire()
-        if kind == "A" then
+        if base == "A" then
             for _, rec in ipairs(changed) do
                 local who = Ambiguate(rec.b ~= "" and rec.b or sender, "short")
+                local name = HL.ShortName(rec.n)
+                local other = HL.OtherList(list)
                 if rec.d then
-                    HL:Print(who .. " removed |cffff4040" .. HL.ShortName(rec.n) .. "|r")
+                    -- a move arrives as "remove here" + "add there": wait a moment and
+                    -- stay quiet if the add shows up, it reports the move
+                    C_Timer.After(2, function()
+                        if not HL:Get(rec.n, other) and not HL:Get(rec.n, list) then
+                            HL:Print(who .. " removed " .. HL.ColorName(name, list) .. " from the " .. HL.ListLabel(list))
+                        end
+                    end)
                 else
-                    HL:Print(who .. " added |cffff4040" .. HL.ShortName(rec.n) .. "|r"
-                        .. (rec.r ~= "" and (" (" .. rec.r .. ")") or ""))
+                    local tomb = HL:Entries(other)[HL.Key(rec.n)]
+                    local moved = tomb and tomb.d and math.abs(tomb.t - rec.t) <= 5
+                    HL:Print(who .. (moved and " moved " or " added ") .. HL.ColorName(name, list) .. " to the "
+                        .. HL.ListLabel(list) .. (rec.r ~= "" and (" (" .. rec.r .. ")") or ""))
                 end
             end
         else
@@ -304,26 +330,26 @@ HL:On("CHAT_MSG_ADDON", function(prefix, msg, channel, rawSender)
         end
         HL:ScheduleHello(30) -- help news travel to peers who missed it
 
-    elseif kind == "H" then
+    elseif base == "H" then
         checkVersion(parts[2], sender)
         if not parts[3] then return end
         local theirs = { strsplit(",", parts[3]) }
-        local mine = HL:Digests()
-        local set, list = {}, {}
+        local mine = HL:Digests(list)
+        local set, diff = {}, {}
         for i = 1, HL.NUM_BUCKETS do
             if theirs[i] ~= mine[i] then
                 set[i - 1] = true
-                list[#list + 1] = i - 1
+                diff[#diff + 1] = i - 1
             end
         end
-        if #list == 0 then return end
-        whisperEntries(HL:EntriesInBuckets(set), rawSender)
-        HL:Whisper("R" .. RS .. table.concat(list, ","), rawSender, "high")
+        if #diff == 0 then return end
+        whisperEntries(HL:EntriesInBuckets(set, list), rawSender, list)
+        HL:Whisper(KINDS[list].R .. RS .. table.concat(diff, ","), rawSender, "high")
 
-    elseif kind == "R" then
+    elseif base == "R" then
         local set = {}
         for b in (parts[2] or ""):gmatch("%d+") do set[tonumber(b)] = true end
-        whisperEntries(HL:EntriesInBuckets(set), rawSender)
+        whisperEntries(HL:EntriesInBuckets(set, list), rawSender, list)
 
     elseif kind == "S" then
         HL:OnRemoteSighting(parts[2], parts[3], parts[4], sender)

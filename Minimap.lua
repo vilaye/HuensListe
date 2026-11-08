@@ -21,7 +21,7 @@ end
 local function showTooltip(owner)
     GameTooltip:SetOwner(owner, "ANCHOR_LEFT")
     GameTooltip:AddLine("|cffcc2222Huens Liste|r")
-    GameTooltip:AddLine(HL:Count() .. " players on the list", 1, 1, 1)
+    GameTooltip:AddLine(HL:Count("kos") .. " on the KOS List, " .. HL:Count("avoid") .. " on the Swine List", 1, 1, 1)
     if HL.newerVersion then
         GameTooltip:AddLine("Update available: " .. HL.newerVersion .. " (you have " .. HL.VERSION .. ")", 1, 0.82, 0)
     end

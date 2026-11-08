@@ -7,18 +7,19 @@ local _, HL = ...
 local function popupEditBox(p) return p.editBox or p.EditBox or (p.GetEditBox and p:GetEditBox()) end
 
 StaticPopupDialogs["HUENSLISTE_ADD"] = {
-    text = "Put |cffff4040%s|r on Huens Liste?\nReason (optional):",
+    text = "Put %s on the %s?\nReason (optional):",
     button1 = ACCEPT,
     button2 = CANCEL,
     hasEditBox = true,
     maxLetters = 80,
     OnAccept = function(self, data)
         local eb = popupEditBox(self)
-        HL:Add(data, eb and eb:GetText() or "")
+        HL:Add(data.full, eb and eb:GetText() or "", data.list, data.relation)
     end,
     EditBoxOnEnterPressed = function(self)
         local p = self:GetParent()
-        HL:Add(p.data, self:GetText())
+        local d = p.data
+        HL:Add(d.full, self:GetText(), d.list, d.relation)
         p:Hide()
     end,
     EditBoxOnEscapePressed = function(self) self:GetParent():Hide() end,
@@ -28,17 +29,25 @@ StaticPopupDialogs["HUENSLISTE_ADD"] = {
     preferredIndex = 3,
 }
 
-function HL:PromptAdd(full)
+function HL:PromptAdd(full, list, relation)
+    list = list or "kos"
     full = HL.NormalizeName(full)
-    if full then StaticPopup_Show("HUENSLISTE_ADD", HL.ShortName(full), nil, full) end
+    if not full then return end
+    -- wrong faction for this list: HL:Add explains why instead of asking for a reason first
+    if (list == "kos" and relation == "friendly") or (list == "avoid" and relation == "enemy") then
+        HL:Add(full, "", list, relation)
+        return
+    end
+    StaticPopup_Show("HUENSLISTE_ADD", HL.ColorName(HL.ShortName(full), list), HL.ListLabel(list),
+        { full = full, list = list, relation = relation })
 end
 
 ---------------------------------------------------------------------------
 -- Main window
 ---------------------------------------------------------------------------
 local ROW_H = 22
-local main, content
-local rows = {}
+local main
+local listPages = {} -- [list] = page
 
 local function makeFS(parent, x, w, font)
     local f = parent:CreateFontString(nil, "OVERLAY", font)
@@ -49,29 +58,45 @@ local function makeFS(parent, x, w, font)
     return f
 end
 
-local function getRow(i)
-    if rows[i] then return rows[i] end
-    local r = CreateFrame("Frame", nil, content)
+local function getRow(page, i)
+    if page.rows[i] then return page.rows[i] end
+    local list = page.list
+    local r = CreateFrame("Frame", nil, page.content)
     r:SetSize(540, ROW_H)
     r:SetPoint("TOPLEFT", 0, -(i - 1) * ROW_H)
     r.bg = r:CreateTexture(nil, "BACKGROUND")
     r.bg:SetAllPoints()
     r.bg:SetColorTexture(1, 1, 1, (i % 2 == 0) and 0.05 or 0)
     r.name = makeFS(r, 4, 130, "GameFontNormal")
-    r.name:SetTextColor(1, 0.3, 0.3)
+    if list == "kos" then r.name:SetTextColor(1, 0.3, 0.3) else r.name:SetTextColor(1, 0.67, 0) end
     r.reason = makeFS(r, 140, 190, "GameFontHighlightSmall")
     r.by = makeFS(r, 336, 90, "GameFontDisableSmall")
-    r.seen = makeFS(r, 430, 85, "GameFontDisableSmall")
+    r.when = makeFS(r, 430, 62, "GameFontDisableSmall")
+
     r.del = CreateFrame("Button", nil, r, "UIPanelCloseButton")
     r.del:SetSize(20, 20)
     r.del:SetPoint("RIGHT", -2, 0)
-    r.del:SetScript("OnClick", function(self) HL:Remove(self:GetParent().full) end)
+    r.del:SetScript("OnClick", function(self) HL:Remove(self:GetParent().full, list) end)
+
+    local other = HL.OtherList(list)
+    r.move = CreateFrame("Button", nil, r, "UIPanelButtonTemplate")
+    r.move:SetSize(24, 18)
+    r.move:SetPoint("RIGHT", r.del, "LEFT", -2, 0)
+    r.move:SetText(list == "kos" and ">" or "<")
+    r.move:SetScript("OnClick", function(self) HL:Move(self:GetParent().full) end)
+    r.move:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine("Move to the " .. HL.ListLabel(other))
+        GameTooltip:Show()
+    end)
+    r.move:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
     r:EnableMouse(true)
     r:SetScript("OnEnter", function(self)
         local e, s = self.entry, self.seenData
         if not e then return end
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:AddLine(e.n, 1, 0.3, 0.3)
+        GameTooltip:AddLine(HL.ColorName(e.n, list))
         if e.r ~= "" then GameTooltip:AddLine(e.r, 1, 1, 1, true) end
         GameTooltip:AddLine("Added by " .. Ambiguate(e.b ~= "" and e.b or "?", "short") .. " on " .. date("%d.%m.%Y %H:%M", e.t), 0.7, 0.7, 0.7)
         if s then
@@ -82,30 +107,39 @@ local function getRow(i)
         GameTooltip:Show()
     end)
     r:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    rows[i] = r
+    page.rows[i] = r
     return r
 end
 
-function HL:RefreshList()
-    if not main or not main:IsShown() then return end
-    local list = {}
-    for _, e in pairs(self.db.entries) do
-        if not e.d then list[#list + 1] = e end
+local function refreshListPage(page)
+    local list = page.list
+    local entries = {}
+    for _, e in pairs(HL:Entries(list)) do
+        if not e.d then entries[#entries + 1] = e end
     end
-    table.sort(list, function(a, b) return a.t > b.t end)
-    for i, e in ipairs(list) do
-        local r = getRow(i)
-        local s = self.db.seen[HL.Key(e.n)]
+    table.sort(entries, function(a, b) return a.t > b.t end)
+    for i, e in ipairs(entries) do
+        local r = getRow(page, i)
+        local s = (list == "kos") and HL.db.seen[HL.Key(e.n)] or nil
         r.full, r.entry, r.seenData = e.n, e, s
         r.name:SetText(HL.ShortName(e.n))
         r.reason:SetText(e.r)
         r.by:SetText(Ambiguate(e.b ~= "" and e.b or "?", "short"))
-        r.seen:SetText(s and HL.Ago(s.t) or "-")
+        if list == "kos" then
+            r.when:SetText(s and HL.Ago(s.t) or "-")
+        else
+            r.when:SetText(HL.Ago(e.t))
+        end
         r:Show()
     end
-    for i = #list + 1, #rows do rows[i]:Hide() end
-    content:SetHeight(math.max(1, #list * ROW_H))
-    main.count:SetText(#list .. " on the list")
+    for i = #entries + 1, #page.rows do page.rows[i]:Hide() end
+    page.content:SetHeight(math.max(1, #entries * ROW_H))
+    page.count:SetText(#entries .. " on the " .. HL.ListLabel(list))
+end
+
+function HL:RefreshList()
+    if not main or not main:IsShown() then return end
+    for _, page in pairs(listPages) do refreshListPage(page) end
 end
 
 local function makeCheck(parent, label, key, anchor, onChange)
@@ -289,6 +323,99 @@ function HL:BuildQoLPage(parent)
     return page
 end
 
+local function buildListPage(parent, list)
+    local page = CreateFrame("Frame", nil, parent)
+    page:SetAllPoints()
+    page.list, page.rows = list, {}
+    listPages[list] = page
+
+    page.count = page:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    page.count:SetPoint("TOPRIGHT", -16, -32)
+
+    local l1 = page:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    l1:SetPoint("TOPLEFT", 20, -32)
+    l1:SetText("Full name (First Last)")
+    local l2 = page:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    l2:SetPoint("TOPLEFT", 182, -32)
+    l2:SetText(list == "kos" and "Reason (enemy faction only)" or "Reason (your own faction)")
+
+    local nameBox = CreateFrame("EditBox", nil, page, "InputBoxTemplate")
+    nameBox:SetSize(150, 20)
+    nameBox:SetPoint("TOPLEFT", 22, -46)
+    nameBox:SetAutoFocus(false)
+
+    local reasonBox = CreateFrame("EditBox", nil, page, "InputBoxTemplate")
+    reasonBox:SetSize(220, 20)
+    reasonBox:SetPoint("LEFT", nameBox, "RIGHT", 12, 0)
+    reasonBox:SetAutoFocus(false)
+    reasonBox:SetMaxLetters(80)
+
+    local addBtn = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+    addBtn:SetSize(60, 22)
+    addBtn:SetPoint("LEFT", reasonBox, "RIGHT", 8, 0)
+    addBtn:SetText("Add")
+    addBtn:SetScript("OnClick", function()
+        local n = strtrim(nameBox:GetText() or "")
+        if n == "" then HL:Print("Enter a name first.") return end
+        HL:Add(n, reasonBox:GetText(), list)
+        nameBox:SetText(""); reasonBox:SetText("")
+        nameBox:ClearFocus(); reasonBox:ClearFocus()
+    end)
+
+    local tgtBtn = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+    tgtBtn:SetSize(90, 22)
+    tgtBtn:SetPoint("LEFT", addBtn, "RIGHT", 4, 0)
+    tgtBtn:SetText("Add Target")
+    tgtBtn:SetScript("OnClick", function()
+        local full = HL.UnitFullName("target")
+        if not full then HL:Print("Target a player first.") return end
+        HL:Add(full, reasonBox:GetText(), list, HL.FactionRelation("target"))
+        reasonBox:SetText(""); reasonBox:ClearFocus()
+    end)
+
+    nameBox:SetScript("OnEnterPressed", function() reasonBox:SetFocus() end)
+    reasonBox:SetScript("OnEnterPressed", function() addBtn:Click() end)
+    nameBox:SetScript("OnEscapePressed", nameBox.ClearFocus)
+    reasonBox:SetScript("OnEscapePressed", reasonBox.ClearFocus)
+
+    local headers = { { "Name", 16 }, { "Reason", 152 }, { "Added by", 348 },
+        { list == "kos" and "Last seen" or "Added", 442 } }
+    for _, h in ipairs(headers) do
+        local fs = page:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        fs:SetPoint("TOPLEFT", h[2], -78)
+        fs:SetText(h[1])
+    end
+
+    local scroll = CreateFrame("ScrollFrame", nil, page, "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", 12, -94)
+    scroll:SetPoint("BOTTOMRIGHT", -32, 44)
+    page.content = CreateFrame("Frame", nil, scroll)
+    page.content:SetSize(540, 1)
+    scroll:SetScrollChild(page.content)
+
+    if list == "kos" then
+        makeCheck(page, "Alerts", "alerts", { "BOTTOMLEFT", 14, 12 })
+        makeCheck(page, "Sound", "sound", { "BOTTOMLEFT", 104, 12 })
+        makeCheck(page, "Share sightings", "shareSightings", { "BOTTOMLEFT", 190, 12 })
+    else
+        makeCheck(page, "Alerts (group join, nearby)", "avoidAlerts", { "BOTTOMLEFT", 14, 12 })
+        makeCheck(page, "Sound", "sound", { "BOTTOMLEFT", 220, 12 })
+    end
+
+    local function bottomBtn(text, x, fn)
+        local b = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+        b:SetSize(72, 22)
+        b:SetPoint("BOTTOMRIGHT", x, 12)
+        b:SetText(text)
+        b:SetScript("OnClick", fn)
+        return b
+    end
+    bottomBtn("Sync", -12, function() HL:SendHello(); HL:Print("Sync requested.") end)
+    bottomBtn("Export", -88, function() HL:ShowExport(list) end)
+    bottomBtn("Import", -164, function() HL:ShowImport() end)
+    return page
+end
+
 local function createMain()
     main = CreateFrame("Frame", "HuensListeFrame", UIParent, "BasicFrameTemplateWithInset")
     main:SetSize(600, 440)
@@ -305,98 +432,19 @@ local function createMain()
 
     local title = main:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     title:SetPoint("TOP", 0, -5)
-    title:SetText("|cffcc2222Huens Liste|r – Kill on Sight")
+    title:SetText("|cffcc2222Huens Liste|r")
 
-    -- Tab 1: KOS list
-    local kos = CreateFrame("Frame", nil, main)
-    kos:SetAllPoints()
+    -- Tabs 1 + 2: the two lists
+    local kosPage = buildListPage(main, "kos")
+    local avoidPage = buildListPage(main, "avoid")
 
-    main.count = kos:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    main.count:SetPoint("TOPRIGHT", -16, -32)
-
-    local l1 = kos:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    l1:SetPoint("TOPLEFT", 20, -32)
-    l1:SetText("Full name (First Last)")
-    local l2 = kos:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    l2:SetPoint("TOPLEFT", 182, -32)
-    l2:SetText("Reason")
-
-    local nameBox = CreateFrame("EditBox", nil, kos, "InputBoxTemplate")
-    nameBox:SetSize(150, 20)
-    nameBox:SetPoint("TOPLEFT", 22, -46)
-    nameBox:SetAutoFocus(false)
-
-    local reasonBox = CreateFrame("EditBox", nil, kos, "InputBoxTemplate")
-    reasonBox:SetSize(220, 20)
-    reasonBox:SetPoint("LEFT", nameBox, "RIGHT", 12, 0)
-    reasonBox:SetAutoFocus(false)
-    reasonBox:SetMaxLetters(80)
-
-    local addBtn = CreateFrame("Button", nil, kos, "UIPanelButtonTemplate")
-    addBtn:SetSize(60, 22)
-    addBtn:SetPoint("LEFT", reasonBox, "RIGHT", 8, 0)
-    addBtn:SetText("Add")
-    addBtn:SetScript("OnClick", function()
-        local n = strtrim(nameBox:GetText() or "")
-        if n == "" then HL:Print("Enter a name first.") return end
-        HL:Add(n, reasonBox:GetText())
-        nameBox:SetText(""); reasonBox:SetText("")
-        nameBox:ClearFocus(); reasonBox:ClearFocus()
-    end)
-
-    local tgtBtn = CreateFrame("Button", nil, kos, "UIPanelButtonTemplate")
-    tgtBtn:SetSize(90, 22)
-    tgtBtn:SetPoint("LEFT", addBtn, "RIGHT", 4, 0)
-    tgtBtn:SetText("Add Target")
-    tgtBtn:SetScript("OnClick", function()
-        local full = HL.UnitFullName("target")
-        if not full then HL:Print("Target a player first.") return end
-        HL:Add(full, reasonBox:GetText())
-        reasonBox:SetText(""); reasonBox:ClearFocus()
-    end)
-
-    nameBox:SetScript("OnEnterPressed", function() reasonBox:SetFocus() end)
-    reasonBox:SetScript("OnEnterPressed", function() addBtn:Click() end)
-    nameBox:SetScript("OnEscapePressed", nameBox.ClearFocus)
-    reasonBox:SetScript("OnEscapePressed", reasonBox.ClearFocus)
-
-    local headers = { { "Name", 16 }, { "Reason", 152 }, { "Added by", 348 }, { "Last seen", 442 } }
-    for _, h in ipairs(headers) do
-        local fs = kos:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        fs:SetPoint("TOPLEFT", h[2], -78)
-        fs:SetText(h[1])
-    end
-
-    local scroll = CreateFrame("ScrollFrame", nil, kos, "UIPanelScrollFrameTemplate")
-    scroll:SetPoint("TOPLEFT", 12, -94)
-    scroll:SetPoint("BOTTOMRIGHT", -32, 44)
-    content = CreateFrame("Frame", nil, scroll)
-    content:SetSize(540, 1)
-    scroll:SetScrollChild(content)
-
-    makeCheck(kos, "Alerts", "alerts", { "BOTTOMLEFT", 14, 12 })
-    makeCheck(kos, "Sound", "sound", { "BOTTOMLEFT", 104, 12 })
-    makeCheck(kos, "Share sightings", "shareSightings", { "BOTTOMLEFT", 190, 12 })
-
-    local function bottomBtn(text, x, fn)
-        local b = CreateFrame("Button", nil, kos, "UIPanelButtonTemplate")
-        b:SetSize(72, 22)
-        b:SetPoint("BOTTOMRIGHT", x, 12)
-        b:SetText(text)
-        b:SetScript("OnClick", fn)
-        return b
-    end
-    bottomBtn("Sync", -12, function() HL:SendHello(); HL:Print("Sync requested.") end)
-    bottomBtn("Export", -88, function() HL:ShowExport() end)
-    bottomBtn("Import", -164, function() HL:ShowImport() end)
-
-    -- Tab 2: Quality of Life, Tab 3: Users
+    -- Tab 3: Quality of Life, Tab 4: Users
     local qol = HL:BuildQoLPage(main)
     local users = HL:BuildUsersPage(main)
 
     -- Tabs below the window
-    local pages = { kos, qol, users }
-    local labels = { "KOS List", "Quality of Life", "Users" }
+    local pages = { kosPage, avoidPage, qol, users }
+    local labels = { "KOS List", "Swine List", "Quality of Life", "Users" }
     main.tabs = {}
     local function selectTab(id)
         for i, page in ipairs(pages) do page:SetShown(i == id) end
@@ -474,12 +522,13 @@ local function createIO()
     end)
 end
 
-function HL:ShowExport()
+function HL:ShowExport(list)
+    list = list or "kos"
     if not ioFrame then createIO() end
-    ioFrame.title:SetText("Export – press Ctrl+C to copy")
+    ioFrame.title:SetText("Export " .. HL.ListLabel(list) .. " – press Ctrl+C to copy")
     ioFrame.btn:Hide()
     ioFrame:Show()
-    ioFrame.eb:SetText(self:ExportString())
+    ioFrame.eb:SetText(self:ExportString(list))
     ioFrame.eb:SetFocus()
     ioFrame.eb:HighlightText()
 end
@@ -514,12 +563,23 @@ if Menu and Menu.ModifyMenu then
             full = HL.NormalizeName(name)
         end
         if not full or full == HL.me then return end
+        local relation = ctx.unit and HL.FactionRelation(ctx.unit) or nil
+        local onList = HL:Find(full)
         root:CreateDivider()
         root:CreateTitle("Huens Liste")
-        if HL:Get(full) then
-            root:CreateButton("Remove from Huens Liste", function() HL:Remove(full) end)
+        if onList then
+            root:CreateButton("Remove from the " .. HL.ListLabel(onList), function() HL:Remove(full, onList) end)
+            local other = HL.OtherList(onList)
+            if not ((other == "kos" and relation == "friendly") or (other == "avoid" and relation == "enemy")) then
+                root:CreateButton("Move to the " .. HL.ListLabel(other), function() HL:Move(full) end)
+            end
         else
-            root:CreateButton("|cffff4040Add to Huens Liste (KOS)|r", function() HL:PromptAdd(full) end)
+            if relation ~= "friendly" then
+                root:CreateButton("Add to the " .. HL.ListLabel("kos"), function() HL:PromptAdd(full, "kos", relation) end)
+            end
+            if relation ~= "enemy" then
+                root:CreateButton("Add to the " .. HL.ListLabel("avoid"), function() HL:PromptAdd(full, "avoid", relation) end)
+            end
         end
     end
     for _, tag in ipairs({ "MENU_UNIT_PLAYER", "MENU_UNIT_ENEMY_PLAYER", "MENU_UNIT_TARGET", "MENU_UNIT_FRIEND",
@@ -540,11 +600,13 @@ end
 
 local HELP = {
     "|cffffff00/hl|r – open the list",
-    "|cffffff00/hl add Firstname Lastname [reason]|r – add a player",
-    "|cffffff00/hl target [reason]|r – add your current target",
-    "|cffffff00/hl del Firstname Lastname|r – remove (no name = target)",
+    "|cffffff00/hl add Firstname Lastname [reason]|r – add to the KOS List (enemy faction)",
+    "|cffffff00/hl swine Firstname Lastname [reason]|r – add to the Swine List (your faction)",
+    "|cffffff00/hl target [reason]|r – add your target (KOS or Swine List, by faction)",
+    "|cffffff00/hl move Firstname Lastname|r – move between the two lists",
+    "|cffffff00/hl del Firstname Lastname|r – remove from either list (no name = target)",
     "|cffffff00/hl debug|r – print sync traffic in chat (for troubleshooting)",
-    "|cffffff00/hl list|r – print the list",
+    "|cffffff00/hl list|r – print both lists",
     "|cffffff00/hl sync|r – sync with friends now",
     "|cffffff00/hl channel <name> [password]|r – private sync channel for friends outside your guild (|cffffff00/hl channel off|r)",
     "|cffffff00/hl guild, group, alerts, sound, share, remote [on/off]|r – toggles",
@@ -554,6 +616,11 @@ local HELP = {
     "|cffffff00/hl buffs|r – list your buffs (troubleshooting for the Well Fed check)",
     "|cffffff00/hl export|r / |cffffff00/hl import|r – share via copy & paste",
 }
+
+local function parseNameAndReason(rest)
+    if HL.IsRealmless() then return rest:match("^(%S+%s+%S+)%s*(.-)$") end
+    return rest:match("^(%S+)%s*(.-)$")
+end
 
 SLASH_HUENSLISTE1 = "/hl"
 SLASH_HUENSLISTE2 = "/huens"
@@ -566,16 +633,16 @@ SlashCmdList.HUENSLISTE = function(msg)
 
     if cmd == "" then
         HL:ToggleMain()
-    elseif cmd == "add" then
-        local name, reason
-        if HL.IsRealmless() then
-            name, reason = rest:match("^(%S+%s+%S+)%s*(.-)$")
-            if not name then HL:Print("Usage: /hl add Firstname Lastname [reason]") return end
-        else
-            name, reason = rest:match("^(%S+)%s*(.-)$")
-            if not name then HL:Print("Usage: /hl add Name[-Realm] [reason]") return end
-        end
-        HL:Add(name, reason)
+    elseif cmd == "add" or cmd == "swine" or cmd == "avoid" then
+        local list = (cmd == "add") and "kos" or "avoid"
+        local name, reason = parseNameAndReason(rest)
+        if not name then HL:Print("Usage: /hl " .. cmd .. " Firstname Lastname [reason]") return end
+        HL:Add(name, reason, list)
+    elseif cmd == "move" then
+        local who = rest ~= "" and rest or HL.UnitFullName("target")
+        if not who then HL:Print("Usage: /hl move Firstname Lastname") return end
+        if not HL:Find(HL.NormalizeName(who) or "") then HL:Print("Not on a list: " .. who) return end
+        HL:Move(who)
     elseif cmd == "debug" then
         HL.debug = not HL.debug
         HL:Print("Debug: " .. (HL.debug and "on – addon traffic is printed in chat" or "off"))
@@ -589,20 +656,24 @@ SlashCmdList.HUENSLISTE = function(msg)
     elseif cmd == "target" or cmd == "t" then
         local full = HL.UnitFullName("target")
         if not full then HL:Print("Target a player first.") return end
-        HL:Add(full, rest)
+        -- enemy faction -> KOS, own faction -> Avoid List
+        local relation = HL.FactionRelation("target")
+        HL:Add(full, rest, relation == "friendly" and "avoid" or "kos", relation)
     elseif cmd == "del" or cmd == "remove" or cmd == "rm" then
         local who = rest ~= "" and rest or HL.UnitFullName("target")
-        if not who then HL:Print("Usage: /hl del Name[-Realm]") return end
+        if not who then HL:Print("Usage: /hl del Firstname Lastname") return end
         HL:Remove(who)
     elseif cmd == "list" then
-        local n = 0
-        for _, e in pairs(HL.db.entries) do
-            if not e.d then
-                n = n + 1
-                print(("  |cffff4040%s|r %s |cff888888(%s)|r"):format(HL.ShortName(e.n), e.r, Ambiguate(e.b, "short")))
+        for _, list in ipairs(HL.LIST_ORDER) do
+            local n = 0
+            for _, e in pairs(HL:Entries(list)) do
+                if not e.d then
+                    n = n + 1
+                    print(("  %s %s |cff888888(%s)|r"):format(HL.ColorName(HL.ShortName(e.n), list), e.r, Ambiguate(e.b, "short")))
+                end
             end
+            HL:Print(n .. " on the " .. HL.ListLabel(list))
         end
-        HL:Print(n .. " players on the list.")
     elseif cmd == "sync" then
         HL:SendHello()
         HL:Print("Sync requested.")

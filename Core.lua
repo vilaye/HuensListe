@@ -11,6 +11,7 @@ HL.RS = ";"   -- record separator
 local DEFAULTS = {
     entries = {},   -- [lowercase "name-realm"] = { n = "Name-Realm", r = reason, b = addedBy, t = serverTime, d = deleted }
     seen = {},      -- [key] = { t = time, z = zone, s = subzone, by = who }
+    avoid = {},     -- same format as entries: the Swine List (own faction)
     peers = {},     -- [key] = { n = name, v = version, t = last heard, via = channel }  (other addon users)
     settings = {
         alerts = true,          -- raid-warning + chat when YOU see a KOS
@@ -172,16 +173,62 @@ function HL:Throttled(key, secs)
 end
 
 ---------------------------------------------------------------------------
+-- Lists
+--   kos   - enemy faction: skull on the nameplate + raid warning
+--   avoid - your own faction (toxic players): chat message + sound when they show up
+-- A player is on at most one list. Both lists sync separately: KOS uses the
+-- original message kinds (A/U/H/R), the Avoid list lowercase ones (a/u/h/r),
+-- so older addon versions simply ignore it.
+---------------------------------------------------------------------------
+HL.LISTS = {
+    kos   = { db = "entries", label = "KOS List",   color = "ff4040", export = "HL1:" },
+    avoid = { db = "avoid",   label = "Swine List", color = "ffaa00", export = "HL1A:" },
+}
+HL.LIST_ORDER = { "kos", "avoid" }
+
+function HL:Entries(list) return self.db[HL.LISTS[list or "kos"].db] end
+
+function HL.ListLabel(list)
+    local L = HL.LISTS[list or "kos"]
+    return "|cff" .. L.color .. L.label .. "|r"
+end
+
+function HL.ColorName(name, list)
+    return "|cff" .. HL.LISTS[list or "kos"].color .. name .. "|r"
+end
+
+function HL.OtherList(list) return list == "avoid" and "kos" or "avoid" end
+
+-- "enemy", "friendly", or nil if we can't tell
+function HL.FactionRelation(unit)
+    if not unit or HL.IsSecret(unit) then return end
+    local ok1, theirs = pcall(UnitFactionGroup, unit)
+    local ok2, mine = pcall(UnitFactionGroup, "player")
+    if not ok1 or not ok2 or HL.IsSecret(theirs) or HL.IsSecret(mine) or not theirs or not mine then return end
+    if theirs == "Neutral" or mine == "Neutral" then return end
+    return (theirs == mine) and "friendly" or "enemy"
+end
+
+---------------------------------------------------------------------------
 -- Data model (last-write-wins per player, tombstones for removals)
 ---------------------------------------------------------------------------
-function HL:Get(full)
-    local e = full and self.db and self.db.entries[HL.Key(full)]
+function HL:Get(full, list)
+    if not full or not self.db then return end
+    local e = self:Entries(list)[HL.Key(full)]
     if e and not e.d then return e end
 end
 
-function HL:Count()
+-- Which list a player is on (or nil)
+function HL:Find(full)
+    for _, list in ipairs(HL.LIST_ORDER) do
+        local e = self:Get(full, list)
+        if e then return list, e end
+    end
+end
+
+function HL:Count(list)
     local n = 0
-    for _, e in pairs(self.db.entries) do if not e.d then n = n + 1 end end
+    for _, e in pairs(self:Entries(list)) do if not e.d then n = n + 1 end end
     return n
 end
 
@@ -193,46 +240,71 @@ local function isNewer(a, b)
     return (a.b or "") > (b.b or "")
 end
 
-function HL:Merge(rec)
+function HL:Merge(rec, list)
+    local entries = self:Entries(list)
     local key = HL.Key(rec.n)
-    if isNewer(rec, self.db.entries[key]) then
-        self.db.entries[key] = { n = rec.n, r = rec.r or "", b = rec.b or "", t = rec.t, d = rec.d or nil }
+    if isNewer(rec, entries[key]) then
+        entries[key] = { n = rec.n, r = rec.r or "", b = rec.b or "", t = rec.t, d = rec.d or nil }
         self.digestCache = nil
         return true
     end
     return false
 end
 
-function HL:SetEntry(full, reason, deleted)
+function HL:SetEntry(full, reason, deleted, list)
+    local entries = self:Entries(list)
     local key = HL.Key(full)
-    local cur = self.db.entries[key]
+    local cur = entries[key]
     local ts = GetServerTime()
     if cur and cur.t >= ts then ts = cur.t + 1 end
     local e = { n = full, r = HL.Clean(reason, 80), b = HL.me or "", t = ts, d = deleted or nil }
-    self.db.entries[key] = e
+    entries[key] = e
     self.digestCache = nil
     self:Fire()
-    if self.BroadcastEntries then self:BroadcastEntries({ e }) end
+    if self.BroadcastEntries then self:BroadcastEntries({ e }, list or "kos") end
     return e
 end
 
-function HL:Add(full, reason)
+-- relation: what we know about the player's faction ("enemy"/"friendly"/nil)
+function HL:Add(full, reason, list, relation)
+    list = list or "kos"
     full = HL.NormalizeName(full)
     if not full then self:Print("Invalid name.") return end
-    if full == HL.me then self:Print("You can't put yourself on the list.") return end
+    if full == HL.me then self:Print("You can't put yourself on a list.") return end
+    if list == "kos" and relation == "friendly" then
+        self:Print(full .. " is on your faction – KOS is for the enemy faction. Use the "
+            .. HL.ListLabel("avoid") .. " instead (|cffffff00/hl swine|r).")
+        return
+    elseif list == "avoid" and relation == "enemy" then
+        self:Print(full .. " is on the enemy faction – put them on the " .. HL.ListLabel("kos") .. " instead.")
+        return
+    end
     reason = HL.Clean(reason, 80)
-    local existed = self:Get(full)
-    self:SetEntry(full, reason)
-    self:Print((existed and "Updated " or "Added ") .. "|cffff4040" .. full .. "|r"
-        .. (reason ~= "" and (" (" .. reason .. ")") or ""))
+    local other = HL.OtherList(list)
+    local moved = self:Get(full, other)
+    if moved then self:SetEntry(moved.n, moved.r, true, other) end
+    local existed = self:Get(full, list)
+    self:SetEntry(full, reason, nil, list)
+    local verb = moved and "Moved" or (existed and "Updated" or "Added")
+    self:Print(("%s %s %s the %s%s"):format(verb, HL.ColorName(full, list), existed and not moved and "on" or "to",
+        HL.ListLabel(list), reason ~= "" and (" (" .. reason .. ")") or ""))
 end
 
-function HL:Remove(full)
+-- list = nil removes the player from whichever list they're on
+function HL:Remove(full, list)
     full = HL.NormalizeName(full)
-    local cur = full and self:Get(full)
-    if not cur then self:Print("Not on the list: " .. tostring(full)) return end
-    self:SetEntry(cur.n, cur.r, true)
-    self:Print("Removed |cffff4040" .. cur.n .. "|r")
+    local e
+    if list then e = full and self:Get(full, list) else list, e = self:Find(full or "") end
+    if not e then self:Print("Not on a list: " .. tostring(full)) return end
+    self:SetEntry(e.n, e.r, true, list)
+    self:Print("Removed " .. HL.ColorName(e.n, list) .. " from the " .. HL.ListLabel(list))
+end
+
+-- Move a player to the other list, keeping the reason
+function HL:Move(full)
+    local list, e = self:Find(HL.NormalizeName(full) or "")
+    if not e then return end
+    self:Add(e.n, e.r, HL.OtherList(list))
 end
 
 function HL.Serialize(e)
@@ -251,11 +323,13 @@ end
 -- Per-bucket digests let two clients find out cheaply which parts differ.
 function HL:BucketOf(key) return HL.Hash(key) % HL.NUM_BUCKETS end
 
-function HL:Digests()
-    if self.digestCache then return self.digestCache end
+function HL:Digests(list)
+    list = list or "kos"
+    self.digestCache = self.digestCache or {}
+    if self.digestCache[list] then return self.digestCache[list] end
     local buckets = {}
     for i = 0, HL.NUM_BUCKETS - 1 do buckets[i] = {} end
-    for key, e in pairs(self.db.entries) do
+    for key, e in pairs(self:Entries(list)) do
         local b = buckets[self:BucketOf(key)]
         b[#b + 1] = key .. ":" .. e.t .. ":" .. (e.d and 1 or 0)
     end
@@ -264,42 +338,44 @@ function HL:Digests()
         table.sort(buckets[i])
         out[#out + 1] = string.format("%08x", HL.Hash(table.concat(buckets[i], ",")))
     end
-    self.digestCache = out
+    self.digestCache[list] = out
     return out
 end
 
-function HL:EntriesInBuckets(set)
-    local list = {}
-    for key, e in pairs(self.db.entries) do
-        if set[self:BucketOf(key)] then list[#list + 1] = e end
+function HL:EntriesInBuckets(set, list)
+    local out = {}
+    for key, e in pairs(self:Entries(list)) do
+        if set[self:BucketOf(key)] then out[#out + 1] = e end
     end
-    return list
+    return out
 end
 
 ---------------------------------------------------------------------------
 -- Export / import (for sharing via Discord etc.)
 ---------------------------------------------------------------------------
-function HL:ExportString()
+function HL:ExportString(list)
+    list = list or "kos"
     local recs = {}
-    for _, e in pairs(self.db.entries) do
+    for _, e in pairs(self:Entries(list)) do
         if not e.d then recs[#recs + 1] = HL.Serialize(e) end
     end
     table.sort(recs)
-    return "HL1:" .. table.concat(recs, HL.RS)
+    return HL.LISTS[list].export .. table.concat(recs, HL.RS)
 end
 
 function HL:Import(text)
     text = strtrim(text or "")
-    local body = text:match("^HL1:(.*)$")
+    local list, body = "avoid", text:match("^HL1A:(.*)$")
+    if not body then list, body = "kos", text:match("^HL1:(.*)$") end
     if not body then self:Print("That doesn't look like a Huens Liste export string.") return end
     local changed = 0
     for rec in body:gmatch("[^;]+") do
         local r = HL.Deserialize(strtrim(rec))
-        if r and self:Merge(r) then changed = changed + 1 end
+        if r and self:Merge(r, list) then changed = changed + 1 end
     end
     self:Fire()
     if self.ScheduleHello then self:ScheduleHello(2) end
-    self:Print("Import done: " .. changed .. " new/updated entries.")
+    self:Print("Import into the " .. HL.ListLabel(list) .. " done: " .. changed .. " new/updated entries.")
 end
 
 ---------------------------------------------------------------------------
@@ -328,20 +404,24 @@ end)
 -- v1.0/1.1 under Forever lost the space in the name ("Illmindofnepho") and can't
 -- match anyone, so they are dropped.
 local function migrate()
-    local fresh, dropped = {}, 0
-    for _, e in pairs(HL.db.entries) do
-        local n = HL.NormalizeName(e.n)
-        if n and type(e.t) == "number" then
-            e.n = n
-            local k = HL.Key(n)
-            if not fresh[k] or e.t > fresh[k].t then fresh[k] = e end
-        else
-            dropped = dropped + 1
+    local dropped = 0
+    for _, list in ipairs(HL.LIST_ORDER) do
+        local key = HL.LISTS[list].db
+        local fresh = {}
+        for _, e in pairs(HL.db[key]) do
+            local n = type(e) == "table" and HL.NormalizeName(e.n)
+            if n and type(e.t) == "number" then
+                e.n = n
+                local k = HL.Key(n)
+                if not fresh[k] or e.t > fresh[k].t then fresh[k] = e end
+            else
+                dropped = dropped + 1
+            end
         end
+        HL.db[key] = fresh
     end
-    HL.db.entries = fresh
     for k in pairs(HL.db.seen) do
-        if not fresh[k] then HL.db.seen[k] = nil end
+        if not HL.db.entries[k] then HL.db.seen[k] = nil end
     end
     HL.digestCache = nil
     if dropped > 0 then
@@ -357,5 +437,6 @@ HL:On("PLAYER_LOGIN", function()
         HL.me = UnitName("player") .. "-" .. HL.MyRealm()
     end
     migrate()
-    HL:Print("loaded – " .. HL:Count() .. " players on the list. Type |cffffff00/hl|r to open.")
+    HL:Print(("loaded – %d on the %s, %d on the %s. Type |cffffff00/hl|r to open."):format(
+        HL:Count("kos"), HL.ListLabel("kos"), HL:Count("avoid"), HL.ListLabel("avoid")))
 end)

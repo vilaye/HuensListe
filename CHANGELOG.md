@@ -1,5 +1,12 @@
 # Huens Liste
 
+## v1.5.0
+- New **Swine List** for toxic players of your own faction: chat message + sound when they join your group, when you join a group they're in, or when you target/mouse over them. No skull.
+- KOS List is now for the enemy faction only: same-faction players no longer get a skull, and adding them to KOS is refused
+- Move players between the two lists (row button, right-click menu, `/hl move`)
+- `/hl swine Firstname Lastname [reason]`; `/hl target` picks the list by faction
+- Both lists sync separately with friends; export/import per list
+
 ## v1.4.0
 - New "Users" tab: everyone with the addon, their version (outdated ones highlighted), online status and how you're connected
 - "Refresh" asks everyone online for their version

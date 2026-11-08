@@ -1,10 +1,12 @@
 # Huens Liste
 
-**A shared kill-on-sight list for you and your friends on PvP rulesets in WoW: Forever.**
+**A shared kill-on-sight list (and avoid list) for you and your friends in WoW: Forever.**
 
 Getting ganked? Put the ganker on the list. Everyone in your group of friends gets the same list. The next time any of you comes across that player, a pulsing skull and **KILL ON SIGHT** appear above their nameplate, together with a raid-warning alert. Your friends also get a chat message saying where they were spotted.
 
 ## Features
+- **Two lists:** the **KOS List** for the enemy faction and the **Swine List** for toxic players of your own faction
+- **Swine List alerts:** chat message + sound when someone on it joins your group, when you join their group, or when you target/mouse over them
 - **Nameplate marker:** a skull and "KILL ON SIGHT" above every listed player
 - **Alerts:** a raid warning plus a sound when a listed player appears near you (nameplate, target or mouseover)
 - **Shared sightings:** your friends see "*Name* spotted in *Zone* by *You*"
@@ -28,8 +30,10 @@ Getting ganked? Put the ganker on the list. Everyone in your group of friends ge
 | Command | What it does |
 |---|---|
 | `/hl` | Open the list |
-| `/hl add Firstname Lastname [reason]` | Add a player |
-| `/hl target [reason]` | Add your current target |
+| `/hl add Firstname Lastname [reason]` | Add to the KOS List (enemy faction) |
+| `/hl swine Firstname Lastname [reason]` | Add to the Swine List (your faction) |
+| `/hl move Firstname Lastname` | Move between the two lists |
+| `/hl target [reason]` | Add your target (KOS or Swine List, by faction) |
 | `/hl del Firstname Lastname` | Remove a player |
 | `/hl sync` | Sync now |
 | `/hl channel <name> [password]` | Private sync channel (`/hl channel off` to stop) |
