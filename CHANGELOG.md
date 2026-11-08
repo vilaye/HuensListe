@@ -1,5 +1,9 @@
 # Huens Liste
 
+## v1.5.1
+- Typing names works with a space or a dash: "Vila Yeezy" and "Vila-Yeezy" (input field and slash commands)
+- All Quality of Life options are now opt-in. The Well Fed reminder is off until you tick it in the Quality of Life tab (it's switched off once for everyone who had it on automatically)
+
 ## v1.5.0
 - New **Swine List** for toxic players of your own faction: chat message + sound when they join your group, when you join a group they're in, or when you target/mouse over them. No skull.
 - KOS List is now for the enemy faction only: same-faction players no longer get a skull, and adding them to KOS is refused
@@ -14,7 +18,7 @@
 
 ## v1.3.0
 - New "Quality of Life" tab in the /hl window
-- Well Fed reminder: movable on-screen warning while you have no food buff (on by default)
+- Well Fed reminder: movable on-screen warning while you have no food buff
 - `/hl wellfed [on/off]`, `/hl buffs`
 - Update notice: a popup tells you when a friend has a newer version (also shown in the minimap tooltip)
 

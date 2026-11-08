@@ -164,8 +164,22 @@ function HL:ResetWellFedPosition()
     if reminder then applyPosition() end
 end
 
+-- Every Quality of Life option is opt-in: off until the player ticks it in the
+-- Quality of Life tab. Add new options here with false.
+local QOL_DEFAULTS = {
+    wellFedReminder = false,
+}
+
 HL:On("PLAYER_LOGIN", function()
-    if HL.settings.wellFedReminder == nil then HL.settings.wellFedReminder = true end
+    for key, value in pairs(QOL_DEFAULTS) do
+        if HL.settings[key] == nil then HL.settings[key] = value end
+    end
+    -- 1.3.0 to 1.5.0 switched the Well Fed reminder on automatically. Turn it off
+    -- once, so it's only on for players who choose it.
+    if not HL.settings.qolOptInDone then
+        HL.settings.qolOptInDone = true
+        HL.settings.wellFedReminder = false
+    end
     createReminder()
     HL:UpdateWellFed()
 end)
