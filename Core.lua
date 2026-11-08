@@ -11,6 +11,7 @@ HL.RS = ";"   -- record separator
 local DEFAULTS = {
     entries = {},   -- [lowercase "name-realm"] = { n = "Name-Realm", r = reason, b = addedBy, t = serverTime, d = deleted }
     seen = {},      -- [key] = { t = time, z = zone, s = subzone, by = who }
+    peers = {},     -- [key] = { n = name, v = version, t = last heard, via = channel }  (other addon users)
     settings = {
         alerts = true,          -- raid-warning + chat when YOU see a KOS
         sound = true,

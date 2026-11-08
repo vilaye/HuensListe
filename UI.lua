@@ -127,6 +127,119 @@ local function makeCheck(parent, label, key, anchor, onChange)
 end
 
 ---------------------------------------------------------------------------
+-- Users tab: who has the addon and which version
+---------------------------------------------------------------------------
+local VIA_LABEL = { GUILD = "Guild", PARTY = "Group", RAID = "Group", INSTANCE_CHAT = "Group",
+    CHANNEL = "Channel", WHISPER = "Whisper" }
+local ONLINE_WINDOW = 6 * 60 -- heard from in the last 6 minutes (hello is every 5)
+
+local usersPage, usersContent
+local userRows = {}
+
+local function getUserRow(i)
+    if userRows[i] then return userRows[i] end
+    local r = CreateFrame("Frame", nil, usersContent)
+    r:SetSize(540, ROW_H)
+    r:SetPoint("TOPLEFT", 0, -(i - 1) * ROW_H)
+    r.bg = r:CreateTexture(nil, "BACKGROUND")
+    r.bg:SetAllPoints()
+    r.bg:SetColorTexture(1, 1, 1, (i % 2 == 0) and 0.05 or 0)
+    r.dot = r:CreateTexture(nil, "ARTWORK")
+    r.dot:SetSize(8, 8)
+    r.dot:SetPoint("LEFT", 6, 0)
+    r.name = makeFS(r, 20, 200, "GameFontHighlight")
+    r.version = makeFS(r, 230, 130, "GameFontHighlightSmall")
+    r.status = makeFS(r, 365, 100, "GameFontDisableSmall")
+    r.via = makeFS(r, 470, 70, "GameFontDisableSmall")
+    userRows[i] = r
+    return r
+end
+
+function HL:RefreshUsers()
+    if not usersPage or not usersPage:IsVisible() then return end
+    local now = GetServerTime()
+    local list = { { n = HL.me, v = HL.VERSION, t = now, via = nil, me = true } }
+    local newest = HL.VersionNumber(HL.VERSION)
+    for _, p in pairs(self.db.peers) do
+        list[#list + 1] = p
+        if p.v and HL.VersionNumber(p.v) > newest then newest = HL.VersionNumber(p.v) end
+    end
+    table.sort(list, function(a, b)
+        if a.me ~= b.me then return a.me and true or false end
+        return (a.t or 0) > (b.t or 0)
+    end)
+
+    local online, outdated = 0, 0
+    for i, p in ipairs(list) do
+        local r = getUserRow(i)
+        local isOnline = p.me or (now - (p.t or 0) < ONLINE_WINDOW)
+        if isOnline then online = online + 1 end
+        r.dot:SetColorTexture(isOnline and 0.2 or 0.4, isOnline and 0.9 or 0.4, isOnline and 0.2 or 0.4, 1)
+        r.name:SetText(Ambiguate(p.n or "?", "short") .. (p.me and " |cff888888(you)|r" or ""))
+        if not p.v then
+            r.version:SetText("|cff888888unknown|r")
+        elseif HL.VersionNumber(p.v) < newest then
+            r.version:SetText("|cffff8020" .. p.v .. " (outdated)|r")
+            outdated = outdated + 1
+        else
+            r.version:SetText("|cff40ff40" .. p.v .. "|r")
+        end
+        r.status:SetText(p.me and "online" or (isOnline and "|cff40ff40online|r" or HL.Ago(p.t)))
+        r.via:SetText(p.via and VIA_LABEL[p.via] or "")
+        r:Show()
+    end
+    for i = #list + 1, #userRows do userRows[i]:Hide() end
+    usersContent:SetHeight(math.max(1, #list * ROW_H))
+    usersPage.summary:SetText(("%d users, %d online%s"):format(#list, online,
+        outdated > 0 and (", |cffff8020" .. outdated .. " outdated|r") or ""))
+end
+
+function HL:BuildUsersPage(parent)
+    local page = CreateFrame("Frame", nil, parent)
+    page:SetAllPoints()
+    usersPage = page
+
+    local header = page:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    header:SetPoint("TOPLEFT", 20, -36)
+    header:SetText("Addon users")
+
+    page.summary = page:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    page.summary:SetPoint("TOPRIGHT", -16, -40)
+
+    local desc = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    desc:SetPoint("TOPLEFT", 20, -58)
+    desc:SetWidth(560)
+    desc:SetJustifyH("LEFT")
+    desc:SetText("Everyone who synced with you in the last 30 days. Players on 1.3.0 or older only show up with their periodic sync (every 5 minutes).")
+
+    local headers = { { "Name", 26 }, { "Version", 236 }, { "Status", 371 }, { "Via", 476 } }
+    for _, h in ipairs(headers) do
+        local fs = page:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        fs:SetPoint("TOPLEFT", h[2], -82)
+        fs:SetText(h[1])
+    end
+
+    local scroll = CreateFrame("ScrollFrame", nil, page, "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", 12, -98)
+    scroll:SetPoint("BOTTOMRIGHT", -32, 44)
+    usersContent = CreateFrame("Frame", nil, scroll)
+    usersContent:SetSize(540, 1)
+    scroll:SetScrollChild(usersContent)
+
+    local refresh = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+    refresh:SetSize(110, 22)
+    refresh:SetPoint("BOTTOMRIGHT", -12, 12)
+    refresh:SetText("Refresh")
+    refresh:SetScript("OnClick", function()
+        HL:PingUsers()
+        HL:Print("Asked everyone online for their version...")
+    end)
+
+    page:SetScript("OnShow", function() HL:RefreshUsers() end)
+    return page
+end
+
+---------------------------------------------------------------------------
 -- Quality of Life tab
 ---------------------------------------------------------------------------
 function HL:BuildQoLPage(parent)
@@ -277,12 +390,13 @@ local function createMain()
     bottomBtn("Export", -88, function() HL:ShowExport() end)
     bottomBtn("Import", -164, function() HL:ShowImport() end)
 
-    -- Tab 2: Quality of Life
+    -- Tab 2: Quality of Life, Tab 3: Users
     local qol = HL:BuildQoLPage(main)
+    local users = HL:BuildUsersPage(main)
 
     -- Tabs below the window
-    local pages = { kos, qol }
-    local labels = { "KOS List", "Quality of Life" }
+    local pages = { kos, qol, users }
+    local labels = { "KOS List", "Quality of Life", "Users" }
     main.tabs = {}
     local function selectTab(id)
         for i, page in ipairs(pages) do page:SetShown(i == id) end

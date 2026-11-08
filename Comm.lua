@@ -143,6 +143,40 @@ local function versionNumber(v)
     local a, b, c = tostring(v or ""):match("^(%d+)%.?(%d*)%.?(%d*)")
     return (tonumber(a) or 0) * 10000 + (tonumber(b) or 0) * 100 + (tonumber(c) or 0)
 end
+HL.VersionNumber = versionNumber
+
+---------------------------------------------------------------------------
+-- Addon users ("Users" tab): everyone we hear from, with their version
+---------------------------------------------------------------------------
+local PEER_MAX_AGE = 30 * 86400 -- forget users not heard from in 30 days
+
+function HL:NotePeer(sender, version, channel)
+    local key = HL.Key(sender)
+    local p = self.db.peers[key] or {}
+    p.n = sender
+    if version and version ~= "" then p.v = HL.Clean(version, 20) end
+    p.t = GetServerTime()
+    -- whispers are replies; keep the route we first met them on (guild/group/channel)
+    if channel and (channel ~= "WHISPER" or not p.via) then p.via = channel end
+    self.db.peers[key] = p
+    if self.RefreshUsers then self:RefreshUsers() end
+end
+
+-- Ask everyone online for their version (new clients answer with "V")
+function HL:PingUsers()
+    self:Broadcast("P" .. RS .. HL.VERSION, "high")
+end
+
+local lastPong = {}
+local function answerPing(rawSender, sender)
+    local now = GetTime()
+    if lastPong[sender] and now - lastPong[sender] < 30 then return end
+    lastPong[sender] = now
+    -- small random delay so a whole guild doesn't answer in the same second
+    C_Timer.After(math.random() * 3, function()
+        HL:Whisper("V" .. RS .. HL.VERSION, rawSender, "low")
+    end)
+end
 
 ---------------------------------------------------------------------------
 -- Update notice: a friend has a newer version -> popup once per session,
@@ -238,7 +272,16 @@ HL:On("CHAT_MSG_ADDON", function(prefix, msg, channel, rawSender)
     local parts = { strsplit(RS, msg) }
     local kind = parts[1]
 
-    if kind == "A" or kind == "U" then
+    -- Anyone who talks to us has the addon. H, P and V carry the version.
+    local carriesVersion = (kind == "H" or kind == "P" or kind == "V")
+    HL:NotePeer(sender, carriesVersion and parts[2] or nil, channel)
+
+    if kind == "P" then
+        checkVersion(parts[2], sender)
+        answerPing(rawSender, sender)
+    elseif kind == "V" then
+        checkVersion(parts[2], sender)
+    elseif kind == "A" or kind == "U" then
         local changed = {}
         for i = 2, #parts do
             local rec = HL.Deserialize(parts[i])
@@ -288,8 +331,15 @@ HL:On("CHAT_MSG_ADDON", function(prefix, msg, channel, rawSender)
 end)
 
 HL:On("PLAYER_LOGIN", function()
+    local now = GetServerTime()
+    for key, p in pairs(HL.db.peers) do
+        if type(p) ~= "table" or not p.t or now - p.t > PEER_MAX_AGE or HL.Key(p.n or "") == HL.Key(HL.me) then
+            HL.db.peers[key] = nil
+        end
+    end
     C_Timer.After(8, function() HL:JoinSyncChannel() end)
     C_Timer.After(15, function() HL:SendHello() end)
+    C_Timer.After(20, function() HL:PingUsers() end)
     C_Timer.NewTicker(300, function() HL:SendHello() end)
 end)
 

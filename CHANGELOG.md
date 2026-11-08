@@ -1,5 +1,9 @@
 # Huens Liste
 
+## v1.4.0
+- New "Users" tab: everyone with the addon, their version (outdated ones highlighted), online status and how you're connected
+- "Refresh" asks everyone online for their version
+
 ## v1.3.0
 - New "Quality of Life" tab in the /hl window
 - Well Fed reminder: movable on-screen warning while you have no food buff (on by default)
