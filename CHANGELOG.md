@@ -4,6 +4,7 @@
 - New "Quality of Life" tab in the /hl window
 - Well Fed reminder: movable on-screen warning while you have no food buff (on by default)
 - `/hl wellfed [on/off]`, `/hl buffs`
+- Update notice: a popup tells you when a friend has a newer version (also shown in the minimap tooltip)
 
 ## v1.2.1
 - First automatic release from GitHub (no gameplay changes)

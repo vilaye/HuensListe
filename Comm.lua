@@ -144,14 +144,56 @@ local function versionNumber(v)
     return (tonumber(a) or 0) * 10000 + (tonumber(b) or 0) * 100 + (tonumber(c) or 0)
 end
 
-local versionWarned = false
-local function checkVersion(v, sender)
-    if versionWarned or not v then return end
-    if versionNumber(v) > versionNumber(HL.VERSION) then
-        versionWarned = true
-        HL:Print(Ambiguate(sender, "short") .. " has a newer version (" .. v .. "). Ask them for the update.")
-    end
+---------------------------------------------------------------------------
+-- Update notice: a friend has a newer version -> popup once per session,
+-- remembered across logins until you've updated.
+---------------------------------------------------------------------------
+StaticPopupDialogs["HUENSLISTE_UPDATE"] = {
+    text = "|cffcc2222Huens Liste|r %s is available (you have %s).\n\n"
+        .. "Close WoW and run |cffffff00Update-HuensListe.bat|r,\nor update it in the CurseForge app.",
+    button1 = OKAY,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
+local popupShown, popupPending = false, false
+
+local function showUpdatePopup()
+    if popupShown or not HL.newerVersion then return end
+    if InCombatLockdown() then popupPending = true return end
+    popupShown, popupPending = true, false
+    StaticPopup_Show("HUENSLISTE_UPDATE", HL.newerVersion, HL.VERSION)
+    HL:Print("Version " .. HL.newerVersion .. " is available (you have " .. HL.VERSION
+        .. "). Run Update-HuensListe.bat or update via CurseForge.")
 end
+
+local function noteNewerVersion(v)
+    if HL.newerVersion and versionNumber(HL.newerVersion) >= versionNumber(v) then return end
+    HL.newerVersion = v
+    HL.db.newestSeenVersion = v
+    showUpdatePopup()
+end
+
+local function checkVersion(v, sender)
+    if not v then return end
+    if versionNumber(v) > versionNumber(HL.VERSION) then noteNewerVersion(v) end
+end
+
+HL:On("PLAYER_LOGIN", function()
+    local seen = HL.db.newestSeenVersion
+    if seen and versionNumber(seen) > versionNumber(HL.VERSION) then
+        HL.newerVersion = seen
+        C_Timer.After(12, showUpdatePopup)
+    else
+        HL.db.newestSeenVersion = nil -- already up to date
+    end
+end)
+
+HL:On("PLAYER_REGEN_ENABLED", function()
+    if popupPending then showUpdatePopup() end
+end)
 
 local syncCount, syncTimer = 0, nil
 local function noteSynced(n)
