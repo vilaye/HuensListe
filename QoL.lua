@@ -85,7 +85,7 @@ end
 local function createReminder()
     reminder = CreateFrame("Frame", "HuensListeWellFedFrame", UIParent)
     reminder:SetSize(340, 44)
-    reminder:SetFrameStrata("HIGH")
+    reminder:SetFrameStrata("MEDIUM") -- below windows like /hl, above the game world
     reminder:SetClampedToScreen(true)
     reminder:SetMovable(true)
     reminder:RegisterForDrag("LeftButton")
