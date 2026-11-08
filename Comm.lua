@@ -150,7 +150,7 @@ end
 ---------------------------------------------------------------------------
 StaticPopupDialogs["HUENSLISTE_UPDATE"] = {
     text = "|cffcc2222Huens Liste|r %s is available (you have %s).\n\n"
-        .. "Close WoW and run |cffffff00Update-HuensListe.bat|r,\nor update it in the CurseForge app.",
+        .. "Run |cffffff00Update-HuensListe.bat|r (or update it in the\nCurseForge app), then type |cffffff00/reload|r.",
     button1 = OKAY,
     timeout = 0,
     whileDead = true,
@@ -166,7 +166,7 @@ local function showUpdatePopup()
     popupShown, popupPending = true, false
     StaticPopup_Show("HUENSLISTE_UPDATE", HL.newerVersion, HL.VERSION)
     HL:Print("Version " .. HL.newerVersion .. " is available (you have " .. HL.VERSION
-        .. "). Run Update-HuensListe.bat or update via CurseForge.")
+        .. "). Run Update-HuensListe.bat or update via CurseForge, then /reload.")
 end
 
 local function noteNewerVersion(v)
