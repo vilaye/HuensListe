@@ -6,6 +6,7 @@
 - Move players between the two lists (row button, right-click menu, `/hl move`)
 - `/hl swine Firstname Lastname [reason]`; `/hl target` picks the list by faction
 - Both lists sync separately with friends; export/import per list
+- Well Fed reminder now sits below windows like /hl
 
 ## v1.4.0
 - New "Users" tab: everyone with the addon, their version (outdated ones highlighted), online status and how you're connected
