@@ -617,9 +617,14 @@ local HELP = {
     "|cffffff00/hl export|r / |cffffff00/hl import|r – share via copy & paste",
 }
 
+-- "/hl add Vila Yeezy camps XR" and "/hl add Vila-Yeezy camps XR" both work
 local function parseNameAndReason(rest)
-    if HL.IsRealmless() then return rest:match("^(%S+%s+%S+)%s*(.-)$") end
-    return rest:match("^(%S+)%s*(.-)$")
+    local first, after = rest:match("^(%S+)%s*(.-)$")
+    if not first then return end
+    if first:find("-", 1, true) then return first, after end
+    local second, reason = after:match("^(%S+)%s*(.-)$")
+    if second then return first .. " " .. second, reason end
+    return first, ""
 end
 
 SLASH_HUENSLISTE1 = "/hl"

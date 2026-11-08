@@ -112,16 +112,27 @@ function HL.NormalizeName(input)
     if type(input) ~= "string" or HL.IsSecret(input) then return end
     input = strtrim(input):gsub("%s+", " ")
     if input == "" then return end
+    if HL.IsRealmless() then
+        -- names come with a space: accept "First-Last" too
+        local name, realm = input:match("^(.-)%-([^%-]+)$")
+        name = strtrim(name or input)
+        if realm and not name:find(" ", 1, true) then name = name .. " " .. strtrim(realm) end
+        if not name:find(" ", 1, true) then return end -- Forever names are always two words
+        return capitalizeWords(name)
+    end
+    -- The game hands addons Forever names as "First-Last" (the last name sits where
+    -- the realm used to be), so a typed "First Last" means exactly that.
+    local typedWithSpace = false
+    if not input:find("-", 1, true) then
+        local first, last = input:match("^(%S+) (%S+)$")
+        if first then input, typedWithSpace = first .. "-" .. last, true end
+    end
     local name, realm = input:match("^(.-)%-([^%-]+)$")
     name = strtrim(name or input)
-    if HL.IsRealmless() then
-        if not name:find(" ", 1, true) then return end -- Forever names are always two words
-        name = capitalizeWords(name)
-        return name
-    end
     name = name:gsub("%s", "")
     realm = realm and realm:gsub("%s", "") or HL.MyRealm()
     if name == "" or realm == "" then return end
+    realm = typedWithSpace and capitalizeWords(realm) or (realm:sub(1, 1):upper() .. realm:sub(2))
     return capitalizeWords(name) .. "-" .. realm
 end
 
