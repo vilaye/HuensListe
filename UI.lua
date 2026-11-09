@@ -79,6 +79,14 @@ end
 ---------------------------------------------------------------------------
 local ROW_H = 22
 local main
+
+-- The template's X button goes through HideUIPanel, which ignores addon frames in
+-- combat on Forever ("We no longer allow addons to show or hide UI panels in combat").
+-- Our windows aren't UI panels, so the X just hides them directly.
+local function closeDirectly(frame)
+    local button = frame.CloseButton or (frame.GetName and frame:GetName() and _G[frame:GetName() .. "CloseButton"])
+    if button then button:SetScript("OnClick", function() frame:Hide() end) end
+end
 local listPages = {} -- [list] = page
 
 local function makeFS(parent, x, w, font)
@@ -482,6 +490,7 @@ local function createMain()
     main:SetFrameStrata("HIGH")
     main:Hide()
     tinsert(UISpecialFrames, "HuensListeFrame")
+    closeDirectly(main)
 
     local title = main:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     title:SetPoint("TOP", 0, -5)
@@ -593,6 +602,7 @@ local function createIO()
     ioFrame:SetScript("OnDragStart", ioFrame.StartMoving)
     ioFrame:SetScript("OnDragStop", ioFrame.StopMovingOrSizing)
     tinsert(UISpecialFrames, "HuensListeIOFrame")
+    closeDirectly(ioFrame)
 
     ioFrame.title = ioFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     ioFrame.title:SetPoint("TOP", 0, -5)

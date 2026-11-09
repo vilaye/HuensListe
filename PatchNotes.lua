@@ -3,6 +3,9 @@
 local _, HL = ...
 
 HL.PATCH_NOTES = {
+    { version = "1.6.1", notes = {
+        "Fixed: the X button didn't close the window in combat",
+    } },
     { version = "1.6.0", notes = {
         "KOS kill counter: kills on KOS players are counted and shared",
         "Users tab shows everyone's KOS kills",
