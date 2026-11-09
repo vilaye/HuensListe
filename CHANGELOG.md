@@ -5,6 +5,7 @@
 - Users tab: "KOS Kills" scoreboard per player
 - Fixed: you showed up twice in the Users tab. Names are now handled the same everywhere ("Vila Yeezy" = "Vila-Yeezy"), and the addon learns your full name from your own messages.
 - Names are shown with first and last name everywhere
+- Edit the note on anyone on a list: click their row in /hl, "Edit note" in the right-click menu, or `/hl note Firstname Lastname new note`. Changes sync to friends.
 
 ## v1.5.1
 - Typing names works with a space or a dash: "Vila Yeezy" and "Vila-Yeezy" (input field and slash commands)

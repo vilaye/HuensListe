@@ -321,7 +321,11 @@ HL:On("CHAT_MSG_ADDON", function(prefix, msg, channel, rawSender)
         local changed = {}
         for i = 2, #parts do
             local rec = HL.Deserialize(parts[i])
-            if rec and HL:Merge(rec, list) then changed[#changed + 1] = rec end
+            local before = rec and list ~= "kills" and HL:Get(rec.n, list)
+            if rec and HL:Merge(rec, list) then
+                rec.wasOnList = before and true or nil
+                changed[#changed + 1] = rec
+            end
         end
         if #changed == 0 then return end
         HL:Fire()
@@ -354,8 +358,13 @@ HL:On("CHAT_MSG_ADDON", function(prefix, msg, channel, rawSender)
                 else
                     local tomb = HL:Entries(other)[HL.Key(rec.n)]
                     local moved = tomb and tomb.d and math.abs(tomb.t - rec.t) <= 5
-                    HL:Print(who .. (moved and " moved " or " added ") .. HL.ColorName(name, list) .. " to the "
-                        .. HL.ListLabel(list) .. (rec.r ~= "" and (" (" .. rec.r .. ")") or ""))
+                    if rec.wasOnList then
+                        HL:Print(who .. " updated the note on " .. HL.ColorName(name, list) .. ": "
+                            .. (rec.r ~= "" and rec.r or "|cff888888(removed)|r"))
+                    else
+                        HL:Print(who .. (moved and " moved " or " added ") .. HL.ColorName(name, list) .. " to the "
+                            .. HL.ListLabel(list) .. (rec.r ~= "" and (" (" .. rec.r .. ")") or ""))
+                    end
                 end
             end
         else

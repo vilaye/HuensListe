@@ -29,6 +29,38 @@ StaticPopupDialogs["HUENSLISTE_ADD"] = {
     preferredIndex = 3,
 }
 
+StaticPopupDialogs["HUENSLISTE_NOTE"] = {
+    text = "Note for %s:",
+    button1 = SAVE or ACCEPT,
+    button2 = CANCEL,
+    hasEditBox = true,
+    maxLetters = 80,
+    OnShow = function(self, data)
+        local eb = popupEditBox(self)
+        if eb and data then eb:SetText(data.r or ""); eb:HighlightText() end
+    end,
+    OnAccept = function(self, data)
+        local eb = popupEditBox(self)
+        if eb then HL:EditNote(data.full, eb:GetText()) end
+    end,
+    EditBoxOnEnterPressed = function(self)
+        local p = self:GetParent()
+        HL:EditNote(p.data.full, self:GetText())
+        p:Hide()
+    end,
+    EditBoxOnEscapePressed = function(self) self:GetParent():Hide() end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
+function HL:PromptNote(full)
+    local list, e = self:Find(HL.NormalizeName(full) or "")
+    if not e then return end
+    StaticPopup_Show("HUENSLISTE_NOTE", HL.ColorName(HL.ShortName(e.n), list), nil, { full = e.n, r = e.r })
+end
+
 function HL:PromptAdd(full, list, relation)
     list = list or "kos"
     full = HL.NormalizeName(full)
@@ -93,6 +125,9 @@ local function getRow(page, i)
     r.move:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
     r:EnableMouse(true)
+    r:SetScript("OnMouseUp", function(self, button)
+        if button == "LeftButton" and self.full then HL:PromptNote(self.full) end
+    end)
     r:SetScript("OnEnter", function(self)
         local e, s = self.entry, self.seenData
         if not e then return end
@@ -115,6 +150,8 @@ local function getRow(page, i)
                 .. ((s.s and s.s ~= "" and s.s ~= s.z) and (" – " .. s.s) or "")
                 .. " by " .. HL.ShortName(s.by), 0.7, 0.7, 0.7, true)
         end
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("Click to edit the note", 0.4, 0.8, 1)
         GameTooltip:Show()
     end)
     r:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -584,6 +621,7 @@ if Menu and Menu.ModifyMenu then
         root:CreateDivider()
         root:CreateTitle("Huens Liste")
         if onList then
+            root:CreateButton("Edit note", function() HL:PromptNote(full) end)
             root:CreateButton("Remove from the " .. HL.ListLabel(onList), function() HL:Remove(full, onList) end)
             local other = HL.OtherList(onList)
             if not ((other == "kos" and relation == "friendly") or (other == "avoid" and relation == "enemy")) then
@@ -620,6 +658,7 @@ local HELP = {
     "|cffffff00/hl swine Firstname Lastname [reason]|r – add to the Swine List (your faction)",
     "|cffffff00/hl target [reason]|r – add your target (KOS or Swine List, by faction)",
     "|cffffff00/hl move Firstname Lastname|r – move between the two lists",
+    "|cffffff00/hl note Firstname Lastname new note|r – change the note (or click the row in /hl)",
     "|cffffff00/hl del Firstname Lastname|r – remove from either list (no name = target)",
     "|cffffff00/hl debug|r – print sync traffic in chat (for troubleshooting)",
     "|cffffff00/hl list|r – print both lists",
@@ -659,6 +698,10 @@ SlashCmdList.HUENSLISTE = function(msg)
         local name, reason = parseNameAndReason(rest)
         if not name then HL:Print("Usage: /hl " .. cmd .. " Firstname Lastname [reason]") return end
         HL:Add(name, reason, list)
+    elseif cmd == "note" then
+        local name, note = parseNameAndReason(rest)
+        if not name then HL:Print("Usage: /hl note Firstname Lastname new note") return end
+        HL:EditNote(name, note)
     elseif cmd == "move" then
         local who = rest ~= "" and rest or HL.UnitFullName("target")
         if not who then HL:Print("Usage: /hl move Firstname Lastname") return end

@@ -235,7 +235,7 @@ end
 ---------------------------------------------------------------------------
 function HL:Get(full, list)
     if not full or not self.db then return end
-    local e = self:Entries(list)[HL.Key(full)]
+    local e = self:Entries(list)[HL.Key(HL.NormalizeName(full) or full)]
     if e and not e.d then return e end
 end
 
@@ -294,11 +294,11 @@ function HL:Add(full, reason, list, relation)
     if not full then self:Print("Invalid name.") return end
     if full == HL.me then self:Print("You can't put yourself on a list.") return end
     if list == "kos" and relation == "friendly" then
-        self:Print(full .. " is on your faction – KOS is for the enemy faction. Use the "
+        self:Print(HL.ShortName(full) .. " is on your faction – KOS is for the enemy faction. Use the "
             .. HL.ListLabel("avoid") .. " instead (|cffffff00/hl swine|r).")
         return
     elseif list == "avoid" and relation == "enemy" then
-        self:Print(full .. " is on the enemy faction – put them on the " .. HL.ListLabel("kos") .. " instead.")
+        self:Print(HL.ShortName(full) .. " is on the enemy faction – put them on the " .. HL.ListLabel("kos") .. " instead.")
         return
     end
     reason = HL.Clean(reason, 80)
@@ -308,7 +308,7 @@ function HL:Add(full, reason, list, relation)
     local existed = self:Get(full, list)
     self:SetEntry(full, reason, nil, list)
     local verb = moved and "Moved" or (existed and "Updated" or "Added")
-    self:Print(("%s %s %s the %s%s"):format(verb, HL.ColorName(full, list), existed and not moved and "on" or "to",
+    self:Print(("%s %s %s the %s%s"):format(verb, HL.ColorName(HL.ShortName(full), list), existed and not moved and "on" or "to",
         HL.ListLabel(list), reason ~= "" and (" (" .. reason .. ")") or ""))
 end
 
@@ -319,7 +319,18 @@ function HL:Remove(full, list)
     if list then e = full and self:Get(full, list) else list, e = self:Find(full or "") end
     if not e then self:Print("Not on a list: " .. tostring(full)) return end
     self:SetEntry(e.n, e.r, true, list)
-    self:Print("Removed " .. HL.ColorName(e.n, list) .. " from the " .. HL.ListLabel(list))
+    self:Print("Removed " .. HL.ColorName(HL.ShortName(e.n), list) .. " from the " .. HL.ListLabel(list))
+end
+
+-- Change the note (reason) of a player who's already on a list
+function HL:EditNote(full, newReason)
+    local list, e = self:Find(HL.NormalizeName(full) or "")
+    if not e then self:Print("Not on a list: " .. tostring(full)) return end
+    newReason = HL.Clean(newReason, 80)
+    if newReason == e.r then return end
+    self:SetEntry(e.n, newReason, nil, list)
+    self:Print(("Note for %s: %s"):format(HL.ColorName(HL.ShortName(e.n), list),
+        newReason ~= "" and newReason or "|cff888888(removed)|r"))
 end
 
 -- Move a player to the other list, keeping the reason

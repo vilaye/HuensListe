@@ -34,6 +34,7 @@ Getting ganked? Put the ganker on the list. Everyone in your group of friends ge
 | `/hl add Firstname Lastname [reason]` | Add to the KOS List (enemy faction) |
 | `/hl swine Firstname Lastname [reason]` | Add to the Swine List (your faction) |
 | `/hl move Firstname Lastname` | Move between the two lists |
+| `/hl note Firstname Lastname new note` | Change the note (or click the row in `/hl`) |
 | `/hl target [reason]` | Add your target (KOS or Swine List, by faction) |
 | `/hl del Firstname Lastname` | Remove a player |
 | `/hl sync` | Sync now |
