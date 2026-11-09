@@ -5,7 +5,7 @@ local _, HL = ...
 HL.PATCH_NOTES = {
     { version = "1.6.1", notes = {
         "Fixed: the X button didn't close the window in combat",
-        "Kill counter also notices KOS deaths without the honor message",
+        "Fixed: KOS kills are now counted (Forever's honor messages have no name)",
     } },
     { version = "1.6.0", notes = {
         "KOS kill counter: kills on KOS players are counted and shared",

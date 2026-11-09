@@ -2,7 +2,7 @@
 
 ## v1.6.1
 - Fixed: the X button didn't close the /hl window (and the export/import window) in combat; only Escape worked
-- Kill counter: also detects kills when a KOS player dies and your honorable-kill counter goes up, or when they die as your target while you're fighting. `/hl debug` now shows each step of the kill detection.
+- Kill counter: Forever's honor message ("You have been awarded 4 Honor.") has no name, so kills are now detected when a KOS player dies and you get honor / an honorable kill within a few seconds, or when they die as your target while you're fighting. `/hl debug` now shows each step of the kill detection.
 
 ## v1.6.0
 - KOS kill counter: when you or your group kill someone on the KOS List (honorable kill), the kill is recorded and shared with your friends. Kills column in the KOS List, killers and last kill in the tooltip.

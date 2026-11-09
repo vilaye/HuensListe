@@ -120,9 +120,14 @@ HL:On("CHAT_MSG_COMBAT_HONOR_GAIN", function(msg)
     if HL.IsSecret(msg) then debugLog("honor message is hidden from addons by the game") return end
     debugLog("honor message: " .. tostring(msg))
     local victim = HL.VictimFromHonorMessage(msg)
-    if not victim then debugLog("could not read a name from it") return end
-    if not HL:Get(victim, "kos") then debugLog(victim .. " is not on the KOS List") return end
-    HL:AddKillCredit(victim)
+    if victim then
+        if not HL:Get(victim, "kos") then debugLog(victim .. " is not on the KOS List") return end
+        HL:AddKillCredit(victim)
+        return
+    end
+    -- Forever just says "You have been awarded 4 Honor." (no name): use it as the
+    -- "we got a kill" signal and match it with a KOS player we saw die
+    HL:OnHonorAward("honor message")
 end)
 
 -- Sources 2 + 3: we watch KOS players die (target, focus, mouseover, nameplates).
@@ -131,7 +136,7 @@ end)
 local recentDeaths = {}          -- [key] = { t, n, target }
 local lastTargetKey, lastTargetTime = nil, 0
 local lastHKTime, lastCombatTime = 0, 0
-local MATCH_WINDOW = 5
+local MATCH_WINDOW = 8
 
 local function inCombatRecently()
     local ok, c = pcall(UnitAffectingCombat, "player")
@@ -165,23 +170,28 @@ local function checkDeath(unit)
     local okT, isTarget = pcall(UnitIsUnit, unit, "target")
     isTarget = (okT and not HL.IsSecret(isTarget) and isTarget) or (lastTargetKey == key and now - lastTargetTime < 10)
     recentDeaths[key] = { t = now, n = e.n, target = isTarget and true or false }
-    debugLog(("%s (KOS) died – your target: %s, in combat: %s, honorable kill %.1fs ago"):format(
+    debugLog(("%s (KOS) died – your target: %s, in combat: %s, last honor %.1fs ago"):format(
         HL.ShortName(e.n), tostring(isTarget and true or false), tostring(inCombatRecently()), now - lastHKTime))
 
     if now - lastHKTime < MATCH_WINDOW then
-        creditDeath(key, "honorable kill")
+        creditDeath(key, "honor")
     elseif isTarget and inCombatRecently() then
         creditDeath(key, "died as your target in combat")
     end
 end
 
-HL:On("PLAYER_PVP_KILLS_CHANGED", function()
+-- We got honor / an honorable kill: credit KOS players who died just before
+function HL:OnHonorAward(source)
     lastHKTime = GetTime()
-    debugLog("honorable kill counter changed (now " .. tostring(honorKills()) .. ")")
+    debugLog(source .. " (honorable kills this session: " .. tostring(honorKills()) .. ")")
+    local any = false
     for key, d in pairs(recentDeaths) do
-        if lastHKTime - d.t < MATCH_WINDOW then creditDeath(key, "honorable kill") end
+        if lastHKTime - d.t < MATCH_WINDOW then creditDeath(key, "honor"); any = true end
     end
-end)
+    if not any then debugLog("no KOS player died in the last " .. MATCH_WINDOW .. "s (waiting a moment in case the death comes next)") end
+end
+
+HL:On("PLAYER_PVP_KILLS_CHANGED", function() HL:OnHonorAward("honorable kill counter changed") end)
 
 HL:On("PLAYER_TARGET_CHANGED", function()
     local full = HL.UnitFullName("target")
