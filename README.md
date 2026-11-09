@@ -45,6 +45,7 @@ Getting ganked? Put the ganker on the list. Everyone in your group of friends ge
 | `/hl buffs` | List your buffs (troubleshooting) |
 | `/hl offset <px>`, `/hl scale <0.5–2>` | Move/resize the nameplate skull |
 | `/hl export`, `/hl import` | Share the list by copy & paste |
+| `/hl notes` | Patch notes: what's new in each version |
 | `/hl debug` | Print sync traffic in chat (troubleshooting) |
 
 ## How syncing works

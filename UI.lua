@@ -494,16 +494,18 @@ local function createMain()
     -- Tab 3: Quality of Life, Tab 4: Users
     local qol = HL:BuildQoLPage(main)
     local users = HL:BuildUsersPage(main)
+    local notes = HL:BuildPatchNotesPage(main)
 
     -- Tabs below the window
-    local pages = { kosPage, avoidPage, qol, users }
-    local labels = { "KOS List", "Swine List", "Quality of Life", "Users" }
+    local pages = { kosPage, avoidPage, qol, users, notes }
+    local labels = { "KOS List", "Swine List", "Quality of Life", "Users", "Patch Notes" }
     main.tabs = {}
     local function selectTab(id)
         for i, page in ipairs(pages) do page:SetShown(i == id) end
         if PanelTemplates_SetTab then PanelTemplates_SetTab(main, id) end
         main.selectedTab = id
     end
+    main.selectTab = selectTab
     for i, label in ipairs(labels) do
         local tab = CreateFrame("Button", "HuensListeFrameTab" .. i, main, "PanelTabButtonTemplate")
         tab:SetID(i)
@@ -529,6 +531,49 @@ end
 function HL:ToggleMain()
     if not main then createMain() end
     main:SetShown(not main:IsShown())
+end
+
+HL.TAB_PATCH_NOTES = 5
+function HL:ShowTab(id)
+    if not main then createMain() end
+    main:Show()
+    main.selectTab(id)
+end
+
+---------------------------------------------------------------------------
+-- Patch Notes tab
+---------------------------------------------------------------------------
+function HL:BuildPatchNotesPage(parent)
+    local page = CreateFrame("Frame", nil, parent)
+    page:SetAllPoints()
+
+    local header = page:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    header:SetPoint("TOPLEFT", 20, -36)
+    header:SetText("Patch Notes")
+
+    local installed = page:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    installed:SetPoint("TOPRIGHT", -16, -40)
+
+    local scroll = CreateFrame("ScrollFrame", nil, page, "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", 12, -62)
+    scroll:SetPoint("BOTTOMRIGHT", -32, 16)
+    local content = CreateFrame("Frame", nil, scroll)
+    content:SetSize(540, 1)
+    scroll:SetScrollChild(content)
+
+    local text = content:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    text:SetPoint("TOPLEFT", 8, -4)
+    text:SetWidth(520)
+    text:SetJustifyH("LEFT")
+    text:SetJustifyV("TOP")
+    if text.SetSpacing then text:SetSpacing(3) end
+
+    page:SetScript("OnShow", function()
+        installed:SetText("You have version |cff40ff40" .. HL.VERSION .. "|r")
+        text:SetText(HL:PatchNotesText())
+        content:SetHeight(math.max(1, text:GetStringHeight() + 12))
+    end)
+    return page
 end
 
 HL:OnChange(function() HL:RefreshList() end)
@@ -658,6 +703,7 @@ local HELP = {
     "|cffffff00/hl swine Firstname Lastname [reason]|r – add to the Swine List (your faction)",
     "|cffffff00/hl target [reason]|r – add your target (KOS or Swine List, by faction)",
     "|cffffff00/hl move Firstname Lastname|r – move between the two lists",
+    "|cffffff00/hl notes|r – patch notes: what's new in each version",
     "|cffffff00/hl note Firstname Lastname new note|r – change the note (or click the row in /hl)",
     "|cffffff00/hl del Firstname Lastname|r – remove from either list (no name = target)",
     "|cffffff00/hl debug|r – print sync traffic in chat (for troubleshooting)",
@@ -698,6 +744,8 @@ SlashCmdList.HUENSLISTE = function(msg)
         local name, reason = parseNameAndReason(rest)
         if not name then HL:Print("Usage: /hl " .. cmd .. " Firstname Lastname [reason]") return end
         HL:Add(name, reason, list)
+    elseif cmd == "notes" or cmd == "patchnotes" or cmd == "changelog" then
+        HL:ShowTab(HL.TAB_PATCH_NOTES)
     elseif cmd == "note" then
         local name, note = parseNameAndReason(rest)
         if not name then HL:Print("Usage: /hl note Firstname Lastname new note") return end
