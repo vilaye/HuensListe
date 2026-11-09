@@ -12,6 +12,8 @@ local DEFAULTS = {
     entries = {},   -- [lowercase "name-realm"] = { n = "Name-Realm", r = reason, b = addedBy, t = serverTime, d = deleted }
     seen = {},      -- [key] = { t = time, z = zone, s = subzone, by = who }
     avoid = {},     -- same format as entries: the Swine List (own faction)
+    kills = {},     -- KOS kill credits: { n = victim, b = killer, t = time, r = zone }
+    selfIds = {},   -- [character GUID] = our full name as the game sends it ("First-Last")
     peers = {},     -- [key] = { n = name, v = version, t = last heard, via = channel }  (other addon users)
     settings = {
         alerts = true,          -- raid-warning + chat when YOU see a KOS
@@ -123,6 +125,9 @@ function HL.NormalizeName(input)
     -- The game hands addons Forever names as "First-Last" (the last name sits where
     -- the realm used to be), so a typed "First Last" means exactly that.
     local typedWithSpace = false
+    -- "First Last-Something" (how addon messages name senders) -> "First-Last"
+    local f1, l1 = input:match("^(%S+) (%S+)%-[^%-]+$")
+    if f1 then input, typedWithSpace = f1 .. "-" .. l1, true end
     if not input:find("-", 1, true) then
         local first, last = input:match("^(%S+) (%S+)$")
         if first then input, typedWithSpace = first .. "-" .. last, true end
@@ -138,10 +143,11 @@ end
 
 function HL.Key(full) return full and full:lower() end
 
+-- How we show a name: Forever names are "First-Last" internally -> "First Last"
 function HL.ShortName(full)
-    local n, r = full:match("^(.-)%-(.+)$")
-    if n and r == HL.MyRealm() then return n end
-    return full
+    if type(full) ~= "string" or full == "" then return "?" end
+    if HL.IsRealmless() then return full end
+    return (full:gsub("%-", " ", 1))
 end
 
 -- Full "Name-Realm" of a player unit, or nil (NPCs, secret values, ...)
@@ -160,11 +166,7 @@ end
 
 -- Identity of an addon-message sender, in the same form as HL.me
 function HL.SenderId(sender)
-    if HL.IsRealmless() then
-        return HL.NormalizeName(sender) or sender
-    end
-    if not sender:find("-", 1, true) then sender = sender .. "-" .. HL.MyRealm() end
-    return sender
+    return HL.NormalizeName(sender) or sender
 end
 
 function HL.Ago(t)
@@ -196,6 +198,14 @@ HL.LISTS = {
     avoid = { db = "avoid",   label = "Swine List", color = "ffaa00", export = "HL1A:" },
 }
 HL.LIST_ORDER = { "kos", "avoid" }
+
+-- KOS kill credits: one record per killer per kill (victim, killer, time, zone).
+-- Synced like the lists, but append-only, keyed by victim|killer|time.
+HL.LISTS.kills = {
+    db = "kills", label = "Kills", color = "ff8080",
+    key = function(rec) return HL.Key(rec.n) .. "|" .. HL.Key(rec.b or "") .. "|" .. tostring(rec.t) end,
+}
+HL.SYNC_ORDER = { "kos", "avoid", "kills" }
 
 function HL:Entries(list) return self.db[HL.LISTS[list or "kos"].db] end
 
@@ -253,7 +263,8 @@ end
 
 function HL:Merge(rec, list)
     local entries = self:Entries(list)
-    local key = HL.Key(rec.n)
+    local L = HL.LISTS[list or "kos"]
+    local key = L.key and L.key(rec) or HL.Key(rec.n)
     if isNewer(rec, entries[key]) then
         entries[key] = { n = rec.n, r = rec.r or "", b = rec.b or "", t = rec.t, d = rec.d or nil }
         self.digestCache = nil
@@ -411,6 +422,36 @@ HL:On("ADDON_LOADED", function(name)
     HL.settings = HL.db.settings
 end)
 
+-- Our own full name. UnitName("player") only gives the first name in Forever, so we
+-- remember the full name once we've seen it come back on one of our own messages.
+function HL:GuessOwnName()
+    local okG, guid = pcall(UnitGUID, "player")
+    if okG and guid and not HL.IsSecret(guid) and self.db.selfIds[guid] then
+        return self.db.selfIds[guid]
+    end
+    local ok, n, r = pcall(UnitFullName, "player")
+    if ok and n and not HL.IsSecret(n) and not HL.IsSecret(r) and r and r ~= "" then
+        local full = HL.NormalizeName(n .. "-" .. r)
+        if full then return full end
+    end
+    if HL.IsRealmless() then return HL.NormalizeName(UnitName("player")) end
+    return UnitName("player") .. "-" .. HL.MyRealm()
+end
+
+function HL:LearnOwnName(full)
+    if not full or full == self.me then return end
+    local okG, guid = pcall(UnitGUID, "player")
+    local hasGuid = okG and guid and not HL.IsSecret(guid)
+    if hasGuid and self.db.selfIds[guid] then return end -- learned once per character, never overwritten
+    local old = self.me
+    self.me = full
+    if hasGuid then self.db.selfIds[guid] = full end
+    -- we were listed as "another user" under this name: drop that row
+    self.db.peers[HL.Key(full)] = nil
+    if old then self.db.peers[HL.Key(old)] = nil end
+    if self.RefreshUsers then self:RefreshUsers() end
+end
+
 -- Re-key stored entries with the current name rules. Entries written by
 -- v1.0/1.1 under Forever lost the space in the name ("Illmindofnepho") and can't
 -- match anyone, so they are dropped.
@@ -442,11 +483,7 @@ end
 
 HL:On("PLAYER_LOGIN", function()
     HL.realmless = nil
-    if HL.IsRealmless() then
-        HL.me = HL.NormalizeName(UnitName("player"))
-    else
-        HL.me = UnitName("player") .. "-" .. HL.MyRealm()
-    end
+    HL.me = HL:GuessOwnName()
     migrate()
     HL:Print(("loaded – %d on the %s, %d on the %s. Type |cffffff00/hl|r to open."):format(
         HL:Count("kos"), HL.ListLabel("kos"), HL:Count("avoid"), HL.ListLabel("avoid")))

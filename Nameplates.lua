@@ -206,6 +206,10 @@ if TooltipDataProcessor and Enum and Enum.TooltipDataType then
             tt:AddLine("|cffffaa00Huens Liste: Swine List|r")
         end
         if e.r ~= "" then tt:AddLine(e.r, 1, 0.8, 0.6, true) end
-        tt:AddLine("added by " .. Ambiguate(e.b ~= "" and e.b or "?", "short") .. " on " .. date("%d.%m.%Y", e.t), 0.6, 0.6, 0.6)
+        if list == "kos" then
+            local count = HL:KillStats(e.n)
+            if count > 0 then tt:AddLine(("Killed %d time%s"):format(count, count == 1 and "" or "s"), 1, 0.5, 0.5) end
+        end
+        tt:AddLine("added by " .. HL.ShortName(e.b) .. " on " .. date("%d.%m.%Y", e.t), 0.6, 0.6, 0.6)
     end)
 end

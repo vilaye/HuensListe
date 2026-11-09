@@ -7,6 +7,7 @@ Getting ganked? Put the ganker on the list. Everyone in your group of friends ge
 ## Features
 - **Two lists:** the **KOS List** for the enemy faction and the **Swine List** for toxic players of your own faction
 - **Swine List alerts:** chat message + sound when someone on it joins your group, when you join their group, or when you target/mouse over them
+- **Kill counter:** honorable kills on KOS players are counted and shared; see who killed whom and who has the most KOS kills
 - **Nameplate marker:** a skull and "KILL ON SIGHT" above every listed player
 - **Alerts:** a raid warning plus a sound when a listed player appears near you (nameplate, target or mouseover)
 - **Shared sightings:** your friends see "*Name* spotted in *Zone* by *You*"

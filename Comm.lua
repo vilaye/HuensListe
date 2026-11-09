@@ -19,7 +19,19 @@ local high, low = {}, {}
 local tokens, MAX_TOKENS = 4, 4
 local SUCCESS = Enum and Enum.SendAddonMessageResult and Enum.SendAddonMessageResult.Success
 
+-- Messages we sent recently: the game echoes guild/group addon messages back to us,
+-- and that echo tells us how the game spells our own full name.
+local sentRecently, sentOrder = {}, {}
+local function rememberSent(msg)
+    if not sentRecently[msg] then
+        sentOrder[#sentOrder + 1] = msg
+        if #sentOrder > 60 then sentRecently[table.remove(sentOrder, 1)] = nil end
+    end
+    sentRecently[msg] = GetTime()
+end
+
 local function rawSend(m)
+    rememberSent(m.msg)
     local ok, res = pcall(C_ChatInfo.SendAddonMessage, HL.PREFIX, m.msg, m.chatType, m.target)
     local sent = ok and res ~= false
     if ok and SUCCESS ~= nil and type(res) == "number" then sent = (res == SUCCESS) end
@@ -91,6 +103,7 @@ end
 local KINDS = {
     kos   = { A = "A", U = "U", H = "H", R = "R" },
     avoid = { A = "a", U = "u", H = "h", R = "r" },
+    kills = { A = "X", U = "Y", H = "Z", R = "W" },
 }
 local KIND_INFO = {} -- "a" -> { list = "avoid", base = "A" }
 for list, m in pairs(KINDS) do
@@ -107,7 +120,7 @@ end
 
 function HL:SendHello(target)
     if not self.db then return end
-    for _, list in ipairs(HL.LIST_ORDER) do
+    for _, list in ipairs(HL.SYNC_ORDER) do
         local msg = KINDS[list].H .. RS .. HL.VERSION .. RS .. table.concat(self:Digests(list), ",")
         if target then self:Whisper(msg, target, "high") else self:Broadcast(msg, "high") end
     end
@@ -262,7 +275,7 @@ function HL:OnRemoteSighting(full, zone, sub, sender)
     if not self.settings.sightingAlerts then return end
     if self:Throttled("remote:" .. HL.Key(full), self.settings.alertCooldown) then return end
     self:Print(("|cffff4040%s|r spotted in |cffffff00%s%s|r by %s"):format(
-        HL.ShortName(full), zone, (sub ~= "" and sub ~= zone) and (" – " .. sub) or "", Ambiguate(sender, "short")))
+        HL.ShortName(full), zone, (sub ~= "" and sub ~= zone) and (" – " .. sub) or "", HL.ShortName(sender)))
     if self.settings.sound then HL.PlaySoundSafe(SOUNDKIT and SOUNDKIT.TELL_MESSAGE) end
 end
 
@@ -276,6 +289,13 @@ HL:On("CHAT_MSG_ADDON", function(prefix, msg, channel, rawSender)
     -- sender is our normalized identity: use it for comparisons and display.
     local sender = HL.SenderId(rawSender)
     if sender == HL.me then return end
+    -- our own message coming back (guild/group echo): learn our full name from it
+    local myFirst = UnitName("player")
+    if channel ~= "WHISPER" and sentRecently[msg] and GetTime() - sentRecently[msg] < 30
+        and myFirst and not HL.IsSecret(myFirst) and HL.Key(sender):sub(1, #myFirst + 1) == HL.Key(myFirst) .. "-" then
+        HL:LearnOwnName(sender)
+        return
+    end
 
     local s = HL.settings
     if channel == "GUILD" and not s.syncGuild then return end
@@ -305,9 +325,22 @@ HL:On("CHAT_MSG_ADDON", function(prefix, msg, channel, rawSender)
         end
         if #changed == 0 then return end
         HL:Fire()
+        if list == "kills" then
+            if base == "A" then
+                for _, rec in ipairs(changed) do
+                    local count = HL:KillStats(rec.n)
+                    HL:Print(("%s killed %s – KOS kill #%d%s"):format(HL.ShortName(rec.b), HL.ColorName(HL.ShortName(rec.n), "kos"),
+                        count, rec.r ~= "" and (" in " .. rec.r) or ""))
+                end
+            else
+                noteSynced(#changed)
+            end
+            HL:ScheduleHello(30)
+            return
+        end
         if base == "A" then
             for _, rec in ipairs(changed) do
-                local who = Ambiguate(rec.b ~= "" and rec.b or sender, "short")
+                local who = HL.ShortName(rec.b ~= "" and rec.b or sender)
                 local name = HL.ShortName(rec.n)
                 local other = HL.OtherList(list)
                 if rec.d then
@@ -358,11 +391,16 @@ end)
 
 HL:On("PLAYER_LOGIN", function()
     local now = GetServerTime()
-    for key, p in pairs(HL.db.peers) do
-        if type(p) ~= "table" or not p.t or now - p.t > PEER_MAX_AGE or HL.Key(p.n or "") == HL.Key(HL.me) then
-            HL.db.peers[key] = nil
+    local fresh = {}
+    for _, p in pairs(HL.db.peers) do
+        local n = type(p) == "table" and HL.SenderId(p.n or "")
+        if n and p.t and now - p.t <= PEER_MAX_AGE and HL.Key(n) ~= HL.Key(HL.me) then
+            local key = HL.Key(n)
+            p.n = n
+            if not fresh[key] or p.t > fresh[key].t then fresh[key] = p end
         end
     end
+    HL.db.peers = fresh
     C_Timer.After(8, function() HL:JoinSyncChannel() end)
     C_Timer.After(15, function() HL:SendHello() end)
     C_Timer.After(20, function() HL:PingUsers() end)

@@ -69,9 +69,10 @@ local function getRow(page, i)
     r.bg:SetColorTexture(1, 1, 1, (i % 2 == 0) and 0.05 or 0)
     r.name = makeFS(r, 4, 130, "GameFontNormal")
     if list == "kos" then r.name:SetTextColor(1, 0.3, 0.3) else r.name:SetTextColor(1, 0.67, 0) end
-    r.reason = makeFS(r, 140, 190, "GameFontHighlightSmall")
-    r.by = makeFS(r, 336, 90, "GameFontDisableSmall")
-    r.when = makeFS(r, 430, 62, "GameFontDisableSmall")
+    r.reason = makeFS(r, 140, 150, "GameFontHighlightSmall")
+    r.by = makeFS(r, 296, 92, "GameFontDisableSmall")
+    r.kills = makeFS(r, 392, 36, "GameFontHighlight")
+    r.when = makeFS(r, 432, 60, "GameFontDisableSmall")
 
     r.del = CreateFrame("Button", nil, r, "UIPanelCloseButton")
     r.del:SetSize(20, 20)
@@ -98,11 +99,21 @@ local function getRow(page, i)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:AddLine(HL.ColorName(e.n, list))
         if e.r ~= "" then GameTooltip:AddLine(e.r, 1, 1, 1, true) end
-        GameTooltip:AddLine("Added by " .. Ambiguate(e.b ~= "" and e.b or "?", "short") .. " on " .. date("%d.%m.%Y %H:%M", e.t), 0.7, 0.7, 0.7)
+        GameTooltip:AddLine("Added by " .. HL.ShortName(e.b) .. " on " .. date("%d.%m.%Y %H:%M", e.t), 0.7, 0.7, 0.7)
+        if list == "kos" then
+            local count, killers, last = HL:KillStats(e.n)
+            if count > 0 then
+                local parts = {}
+                for who, n in pairs(killers) do parts[#parts + 1] = who .. " (" .. n .. ")" end
+                table.sort(parts)
+                GameTooltip:AddLine(("Killed %d time%s – by %s"):format(count, count == 1 and "" or "s", table.concat(parts, ", ")), 1, 0.5, 0.5, true)
+                GameTooltip:AddLine("Last kill " .. HL.Ago(last.t) .. (last.r ~= "" and (" in " .. last.r) or ""), 0.7, 0.7, 0.7)
+            end
+        end
         if s then
             GameTooltip:AddLine("Last seen " .. HL.Ago(s.t) .. " in " .. (s.z or "?")
                 .. ((s.s and s.s ~= "" and s.s ~= s.z) and (" – " .. s.s) or "")
-                .. " by " .. Ambiguate(s.by or "?", "short"), 0.7, 0.7, 0.7, true)
+                .. " by " .. HL.ShortName(s.by), 0.7, 0.7, 0.7, true)
         end
         GameTooltip:Show()
     end)
@@ -124,7 +135,8 @@ local function refreshListPage(page)
         r.full, r.entry, r.seenData = e.n, e, s
         r.name:SetText(HL.ShortName(e.n))
         r.reason:SetText(e.r)
-        r.by:SetText(Ambiguate(e.b ~= "" and e.b or "?", "short"))
+        r.by:SetText(HL.ShortName(e.b))
+        r.kills:SetText(list == "kos" and (function() local c = HL:KillStats(e.n) return c > 0 and tostring(c) or "|cff666666-|r" end)() or "")
         if list == "kos" then
             r.when:SetText(s and HL.Ago(s.t) or "-")
         else
@@ -181,10 +193,11 @@ local function getUserRow(i)
     r.dot = r:CreateTexture(nil, "ARTWORK")
     r.dot:SetSize(8, 8)
     r.dot:SetPoint("LEFT", 6, 0)
-    r.name = makeFS(r, 20, 200, "GameFontHighlight")
-    r.version = makeFS(r, 230, 130, "GameFontHighlightSmall")
-    r.status = makeFS(r, 365, 100, "GameFontDisableSmall")
-    r.via = makeFS(r, 470, 70, "GameFontDisableSmall")
+    r.name = makeFS(r, 20, 180, "GameFontHighlight")
+    r.version = makeFS(r, 205, 105, "GameFontHighlightSmall")
+    r.kills = makeFS(r, 315, 55, "GameFontHighlight")
+    r.status = makeFS(r, 375, 95, "GameFontDisableSmall")
+    r.via = makeFS(r, 475, 65, "GameFontDisableSmall")
     userRows[i] = r
     return r
 end
@@ -203,13 +216,16 @@ function HL:RefreshUsers()
         return (a.t or 0) > (b.t or 0)
     end)
 
+    local scores = self:KillScores()
     local online, outdated = 0, 0
     for i, p in ipairs(list) do
         local r = getUserRow(i)
         local isOnline = p.me or (now - (p.t or 0) < ONLINE_WINDOW)
         if isOnline then online = online + 1 end
         r.dot:SetColorTexture(isOnline and 0.2 or 0.4, isOnline and 0.9 or 0.4, isOnline and 0.2 or 0.4, 1)
-        r.name:SetText(Ambiguate(p.n or "?", "short") .. (p.me and " |cff888888(you)|r" or ""))
+        r.name:SetText(HL.ShortName(p.n) .. (p.me and " |cff888888(you)|r" or ""))
+        local kills = scores[HL.Key(p.n or "")] or 0
+        r.kills:SetText(kills > 0 and ("|cffff6060" .. kills .. "|r") or "|cff666666-|r")
         if not p.v then
             r.version:SetText("|cff888888unknown|r")
         elseif HL.VersionNumber(p.v) < newest then
@@ -246,7 +262,7 @@ function HL:BuildUsersPage(parent)
     desc:SetJustifyH("LEFT")
     desc:SetText("Everyone who synced with you in the last 30 days. Players on 1.3.0 or older only show up with their periodic sync (every 5 minutes).")
 
-    local headers = { { "Name", 26 }, { "Version", 236 }, { "Status", 371 }, { "Via", 476 } }
+    local headers = { { "Name", 26 }, { "Version", 211 }, { "KOS Kills", 321 }, { "Status", 381 }, { "Via", 481 } }
     for _, h in ipairs(headers) do
         local fs = page:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         fs:SetPoint("TOPLEFT", h[2], -82)
@@ -378,8 +394,8 @@ local function buildListPage(parent, list)
     nameBox:SetScript("OnEscapePressed", nameBox.ClearFocus)
     reasonBox:SetScript("OnEscapePressed", reasonBox.ClearFocus)
 
-    local headers = { { "Name", 16 }, { "Reason", 152 }, { "Added by", 348 },
-        { list == "kos" and "Last seen" or "Added", 442 } }
+    local headers = { { "Name", 16 }, { "Reason", 152 }, { "Added by", 308 },
+        { list == "kos" and "Kills" or "", 404 }, { list == "kos" and "Last seen" or "Added", 444 } }
     for _, h in ipairs(headers) do
         local fs = page:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         fs:SetPoint("TOPLEFT", h[2], -78)
@@ -674,7 +690,7 @@ SlashCmdList.HUENSLISTE = function(msg)
             for _, e in pairs(HL:Entries(list)) do
                 if not e.d then
                     n = n + 1
-                    print(("  %s %s |cff888888(%s)|r"):format(HL.ColorName(HL.ShortName(e.n), list), e.r, Ambiguate(e.b, "short")))
+                    print(("  %s %s |cff888888(%s)|r"):format(HL.ColorName(HL.ShortName(e.n), list), e.r, HL.ShortName(e.b)))
                 end
             end
             HL:Print(n .. " on the " .. HL.ListLabel(list))
