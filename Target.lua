@@ -1,14 +1,18 @@
 -- Huens Liste: "target nearby KOS" button, key binding and macro
 --
--- Addons can't target by themselves: it has to be a secure button the player
--- presses (key binding, /click macro or the on-screen button). The button runs a
--- macro of /target lines; the last line that finds someone wins, so the most
+-- Addons can't target by themselves, and in Forever a /target inside addon-built
+-- "macrotext" finds nobody either. So the addon keeps a real WoW macro ("KOS Target")
+-- up to date; the key binding and the on-screen button just run that macro, which
+-- behaves exactly like typing /target yourself. The macro is a list of /target
+-- lines; the last line that finds someone wins, so the most
 -- recently seen KOS player goes last. The macro can't change during combat, so it
 -- also lists other KOS players (the whole list if it's small) to catch people who
 -- only show up mid-fight.
 local _, HL = ...
 
 local BUTTON_NAME = "HuensListeTargetButton"
+local MACRO_NAME = "KOS Target"
+local MACRO_ICON = "INV_Misc_Bone_HumanSkull_01"
 local MAX_NAMES = 15
 local NEARBY_FOR = 120 -- seconds a sighting counts as "nearby"
 
@@ -75,14 +79,38 @@ local function applyVisibility()
     if HL.settings.targetButton then button:Show() else button:Hide() end
 end
 
--- Push the current names into the secure button (only possible out of combat)
+local function macroIndex()
+    local i = GetMacroIndexByName(MACRO_NAME)
+    if i and i > 0 then return i end
+end
+
+-- Create the "KOS Target" macro if it doesn't exist (out of combat only)
+function HL:EnsureTargetMacro()
+    if InCombatLockdown() then return macroIndex() end
+    local i = macroIndex()
+    if i then return i end
+    local ok, result = pcall(CreateMacro, MACRO_NAME, MACRO_ICON, self:TargetMacroText(), false)
+    if ok and result and result > 0 then return result end
+    self:Print("Couldn't create the \"" .. MACRO_NAME .. "\" macro"
+        .. (not ok and (": " .. tostring(result)) or " (your account macros may be full)") .. ".")
+end
+
+-- Write the current names into the macro (only possible out of combat)
+function HL:UpdateTargetMacro()
+    local i = macroIndex()
+    if not i then return end
+    local body = self:TargetMacroText()
+    if GetMacroBody(i) ~= body then EditMacro(i, MACRO_NAME, MACRO_ICON, body) end
+end
+
 function HL:UpdateTargetButton()
     if not button then return end
     local _, latest = self:TargetCandidates()
     button.label:SetText(latest and HL.ShortName(latest) or "|cff888888no KOS nearby|r")
     if InCombatLockdown() then pending = true return end
     pending = false
-    button:SetAttribute("macrotext", self:TargetMacroText())
+    if self.settings.targetButton then self:EnsureTargetMacro() end
+    self:UpdateTargetMacro()
     applyVisibility()
 end
 
@@ -107,7 +135,7 @@ local function createButton()
     button:RegisterForClicks("AnyUp", "AnyDown")
     button:RegisterForDrag("LeftButton")
     button:SetAttribute("type", "macro")
-    button:SetAttribute("macrotext", "")
+    button:SetAttribute("macro", MACRO_NAME) -- runs the real macro
     if button.SetBackdrop then
         button:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
             edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = 12,
@@ -151,9 +179,14 @@ local function createButton()
     -- /hl debug: show that the button fired and what it tried
     button:SetScript("PreClick", function(_, mouseButton, down)
         if not HL.debug then return end
-        local text = button:GetAttribute("macrotext") or ""
+        local i = macroIndex()
+        if not i then
+            HL:Print("|cff888888[target] button fired, but there is no \"" .. MACRO_NAME .. "\" macro – create it with /hl macro|r")
+            return
+        end
+        local text = GetMacroBody(i) or ""
         local n = select(2, text:gsub("/target ", ""))
-        HL:Print(("|cff888888[target] button fired (%s, %s) – %d /target lines, %d characters:|r"):format(
+        HL:Print(("|cff888888[target] button fired (%s, %s) – macro has %d /target lines, %d characters:|r"):format(
             tostring(mouseButton), down and "down" or "up", n, #text))
         for line in text:gmatch("[^\n]+") do HL:Print("|cff888888  " .. line .. "|r") end
     end)
@@ -181,25 +214,15 @@ function HL:ResetTargetButtonPosition()
     end
 end
 
--- /hl macro: create a "KOS Target" macro and put it on the cursor
+-- /hl macro: create/update the "KOS Target" macro and put it on the cursor
 function HL:CreateTargetMacro()
     if InCombatLockdown() then self:Print("Can't create macros in combat.") return end
-    local name = "KOS Target"
-    local body = "/click " .. BUTTON_NAME
-    local index = GetMacroIndexByName(name)
-    if index and index > 0 then
-        EditMacro(index, name, "INV_Misc_Bone_HumanSkull_01", body)
-    else
-        local ok, result = pcall(CreateMacro, name, "INV_Misc_Bone_HumanSkull_01", body, false)
-        if not ok or not result then
-            self:Print("Couldn't create the macro" .. (not ok and (": " .. tostring(result)) or " (your account macros may be full)")
-                .. ". Make one yourself with: " .. body)
-            return
-        end
-        index = result
-    end
-    PickupMacro(index)
-    self:Print("Macro \"KOS Target\" is on your cursor – drop it on an action bar.")
+    local i = self:EnsureTargetMacro()
+    if not i then return end
+    self:UpdateTargetMacro()
+    PickupMacro(i)
+    self:Print("Macro \"" .. MACRO_NAME .. "\" is on your cursor – drop it on an action bar. "
+        .. "Huens Liste keeps the names in it up to date.")
 end
 
 HL:On("PLAYER_LOGIN", function()
