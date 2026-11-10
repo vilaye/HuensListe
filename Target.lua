@@ -141,6 +141,21 @@ local function createButton()
     end)
     button:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
+    -- /hl debug: show that the button fired and what it tried
+    button:SetScript("PreClick", function(_, mouseButton, down)
+        if not HL.debug then return end
+        local text = button:GetAttribute("macrotext") or ""
+        local n = select(2, text:gsub("/targetexact", ""))
+        HL:Print(("|cff888888[target] button fired (%s, %s) – %d /targetexact lines:|r"):format(
+            tostring(mouseButton), down and "down" or "up", n))
+        for line in text:gmatch("[^\n]+") do HL:Print("|cff888888  " .. line .. "|r") end
+    end)
+    button:SetScript("PostClick", function()
+        if not HL.debug then return end
+        local full = HL.UnitFullName("target")
+        HL:Print("|cff888888[target] your target now: " .. tostring(full and HL.ShortName(full) or "nobody") .. "|r")
+    end)
+
     button:ClearAllPoints()
     local p = HL.settings.targetButtonPos
     if type(p) == "table" and p[1] then
@@ -170,7 +185,8 @@ function HL:CreateTargetMacro()
     else
         local ok, result = pcall(CreateMacro, name, "INV_Misc_Bone_HumanSkull_01", body, false)
         if not ok or not result then
-            self:Print("Couldn't create the macro (your account macros may be full). Make one yourself with: " .. body)
+            self:Print("Couldn't create the macro" .. (not ok and (": " .. tostring(result)) or " (your account macros may be full)")
+                .. ". Make one yourself with: " .. body)
             return
         end
         index = result
