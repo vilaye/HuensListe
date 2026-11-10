@@ -168,6 +168,7 @@ end
 -- Quality of Life tab. Add new options here with false.
 local QOL_DEFAULTS = {
     wellFedReminder = false,
+    targetButton = false,
 }
 
 HL:On("PLAYER_LOGIN", function()

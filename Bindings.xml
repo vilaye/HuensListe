@@ -1,0 +1,4 @@
+<Bindings>
+    <Binding name="CLICK HuensListeTargetButton:LeftButton" header="HUENSLISTE" category="ADDONS">
+    </Binding>
+</Bindings>

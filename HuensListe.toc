@@ -15,6 +15,7 @@ Comm.lua
 Nameplates.lua
 QoL.lua
 Kills.lua
+Target.lua
 PatchNotes.lua
 UI.lua
 Minimap.lua

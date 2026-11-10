@@ -7,6 +7,7 @@ Getting ganked? Put the ganker on the list. Everyone in your group of friends ge
 ## Features
 - **Two lists:** the **KOS List** for the enemy faction and the **Swine List** for toxic players of your own faction
 - **Swine List alerts:** chat message + sound when someone on it joins your group, when you join their group, or when you target/mouse over them
+- **Target nearby KOS:** key binding, macro or on-screen button that targets the KOS player you saw most recently
 - **Kill counter:** honorable kills on KOS players are counted and shared; see who killed whom and who has the most KOS kills
 - **Nameplate marker:** a skull and "KILL ON SIGHT" above every listed player
 - **Alerts:** a raid warning plus a sound when a listed player appears near you (nameplate, target or mouseover)
@@ -45,6 +46,7 @@ Getting ganked? Put the ganker on the list. Everyone in your group of friends ge
 | `/hl buffs` | List your buffs (troubleshooting) |
 | `/hl offset <px>`, `/hl scale <0.5–2>` | Move/resize the nameplate skull |
 | `/hl export`, `/hl import` | Share the list by copy & paste |
+| `/hl macro` | Create a "KOS Target" macro that targets the nearby KOS player |
 | `/hl notes` | Patch notes: what's new in each version |
 | `/hl debug` | Print sync traffic in chat (troubleshooting) |
 

@@ -376,6 +376,33 @@ function HL:BuildQoLPage(parent)
     resetBtn:SetText("Reset position")
     resetBtn:SetScript("OnClick", function() HL:ResetWellFedPosition() end)
 
+    -- KOS target button
+    local tsection = page:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    tsection:SetPoint("TOPLEFT", 20, -184)
+    tsection:SetText("Target nearby KOS")
+
+    makeCheck(page, "Show the on-screen target button", "targetButton", { "TOPLEFT", 16, -202 },
+        function() HL:UpdateTargetButton() end)
+
+    local tdesc = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    tdesc:SetPoint("TOPLEFT", 44, -228)
+    tdesc:SetWidth(520)
+    tdesc:SetJustifyH("LEFT")
+    tdesc:SetText("Targets the KOS player you saw most recently (Shift + drag to move the button). "
+        .. "Also works without the button: Key Bindings > AddOns > Huens Liste, or a macro.")
+
+    local macroBtn = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+    macroBtn:SetSize(120, 22)
+    macroBtn:SetPoint("TOPLEFT", 44, -256)
+    macroBtn:SetText("Create macro")
+    macroBtn:SetScript("OnClick", function() HL:CreateTargetMacro() end)
+
+    local tResetBtn = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+    tResetBtn:SetSize(120, 22)
+    tResetBtn:SetPoint("LEFT", macroBtn, "RIGHT", 8, 0)
+    tResetBtn:SetText("Reset position")
+    tResetBtn:SetScript("OnClick", function() HL:ResetTargetButtonPosition() end)
+
     page:SetScript("OnShow", refreshMoveText)
     -- Leaving the window locks the reminder again
     page:SetScript("OnHide", function()
@@ -713,6 +740,7 @@ local HELP = {
     "|cffffff00/hl swine Firstname Lastname [reason]|r – add to the Swine List (your faction)",
     "|cffffff00/hl target [reason]|r – add your target (KOS or Swine List, by faction)",
     "|cffffff00/hl move Firstname Lastname|r – move between the two lists",
+    "|cffffff00/hl macro|r – create a macro that targets the nearby KOS player",
     "|cffffff00/hl notes|r – patch notes: what's new in each version",
     "|cffffff00/hl note Firstname Lastname new note|r – change the note (or click the row in /hl)",
     "|cffffff00/hl del Firstname Lastname|r – remove from either list (no name = target)",
@@ -754,6 +782,8 @@ SlashCmdList.HUENSLISTE = function(msg)
         local name, reason = parseNameAndReason(rest)
         if not name then HL:Print("Usage: /hl " .. cmd .. " Firstname Lastname [reason]") return end
         HL:Add(name, reason, list)
+    elseif cmd == "macro" then
+        HL:CreateTargetMacro()
     elseif cmd == "notes" or cmd == "patchnotes" or cmd == "changelog" then
         HL:ShowTab(HL.TAB_PATCH_NOTES)
     elseif cmd == "note" then

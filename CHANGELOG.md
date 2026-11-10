@@ -3,6 +3,7 @@
 ## v1.6.1
 - Fixed: the X button didn't close the /hl window (and the export/import window) in combat; only Escape worked
 - Kill counter: Forever's honor message ("You have been awarded 4 Honor.") has no name, so kills are now detected when a KOS player dies and you get honor / an honorable kill within a few seconds, or when they die as your target while you're fighting. `/hl debug` now shows each step of the kill detection.
+- Target nearby KOS: a secure button that targets the KOS player you saw most recently. Use it via Key Bindings > AddOns > Huens Liste, `/hl macro` (creates a "KOS Target" macro), or the on-screen button (Quality of Life tab, off by default).
 
 ## v1.6.0
 - KOS kill counter: when you or your group kill someone on the KOS List (honorable kill), the kill is recorded and shared with your friends. Kills column in the KOS List, killers and last kill in the tooltip.

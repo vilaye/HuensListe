@@ -97,6 +97,7 @@ function HL:UpdatePlate(unit)
         return
     end
 
+    if self.NoteKOSNearby then self:NoteKOSNearby(e.n) end
     local o = getOverlay(plate)
     o:ClearAllPoints()
     o:SetPoint("BOTTOM", plate.UnitFrame or plate, "TOP", 0, self.settings.plateOffsetY or 0)
@@ -132,7 +133,11 @@ local function checkUnit(unit)
     local full = HL.UnitFullName(unit)
     if not full then return end
     local e = kosEntryFor(unit, full)
-    if e then HL:OnSighting(full, e, unit) return end
+    if e then
+        if HL.NoteKOSNearby then HL:NoteKOSNearby(e.n) end
+        HL:OnSighting(full, e, unit)
+        return
+    end
     local a = HL:Get(full, "avoid")
     if a then HL:AvoidAlert(full, a, "is nearby") end
 end
