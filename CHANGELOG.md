@@ -2,6 +2,7 @@
 
 ## v1.6.3
 - Swine List alerts only on direct contact: when a Swine joins your party/raid, when you join their group, or when they whisper you. Being near them no longer alerts (the tooltip line stays).
+- Fixed: KOS targeting still found nobody. The macro was longer than WoW's 255-character limit, so the most important lines (the players you just saw) were cut off. It now stays under the limit and always keeps the most recently seen KOS players.
 
 ## v1.6.2
 - Fixed: the KOS target button/macro/key binding didn't target anyone. Forever only accepts `/target First Last` (not `/targetexact`), so the macro now uses that. Up to 15 names.

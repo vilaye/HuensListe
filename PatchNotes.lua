@@ -5,6 +5,7 @@ local _, HL = ...
 HL.PATCH_NOTES = {
     { version = "1.6.3", notes = {
         "Swine List only alerts when they join your group or whisper you, not when they're nearby",
+        "Fixed: KOS targeting (the macro was too long and got cut off)",
     } },
     { version = "1.6.2", notes = {
         "Fixed: the KOS target button/macro now actually targets",

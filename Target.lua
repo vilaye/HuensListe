@@ -54,11 +54,20 @@ function HL:TargetCandidates()
     return names, recent[#recent] and recent[#recent].n or nil
 end
 
+-- Macros are limited to 255 characters; anything past that never runs. The most
+-- important names are at the end, so we fill from the end and drop from the front.
+local MACRO_LIMIT = 255
 function HL:TargetMacroText()
     local names = self:TargetCandidates()
-    local lines = {}
-    for _, n in ipairs(names) do lines[#lines + 1] = targetLines(n) end
-    return table.concat(lines, "\n")
+    local kept, length = {}, 0
+    for i = #names, 1, -1 do
+        local line = targetLines(names[i])
+        local add = #line + (#kept > 0 and 1 or 0)
+        if length + add > MACRO_LIMIT then break end
+        table.insert(kept, 1, line)
+        length = length + add
+    end
+    return table.concat(kept, "\n")
 end
 
 local function applyVisibility()
@@ -127,12 +136,12 @@ local function createButton()
     button:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
         GameTooltip:AddLine("|cffcc2222Huens Liste|r – target nearby KOS")
-        local names = HL:TargetCandidates()
-        if #names == 0 then
+        local text = HL:TargetMacroText()
+        if text == "" then
             GameTooltip:AddLine("Nobody on the KOS List yet", 0.7, 0.7, 0.7)
         else
             GameTooltip:AddLine("Tries, in this order (last found wins):", 0.7, 0.7, 0.7)
-            for _, n in ipairs(names) do GameTooltip:AddLine("  " .. HL.ShortName(n), 1, 0.4, 0.4) end
+            for line in text:gmatch("[^\n]+") do GameTooltip:AddLine("  " .. line:gsub("^/target ", ""), 1, 0.4, 0.4) end
         end
         GameTooltip:AddLine("Shift + drag to move", 0.4, 0.8, 1)
         GameTooltip:Show()
@@ -144,8 +153,8 @@ local function createButton()
         if not HL.debug then return end
         local text = button:GetAttribute("macrotext") or ""
         local n = select(2, text:gsub("/target ", ""))
-        HL:Print(("|cff888888[target] button fired (%s, %s) – %d /target lines:|r"):format(
-            tostring(mouseButton), down and "down" or "up", n))
+        HL:Print(("|cff888888[target] button fired (%s, %s) – %d /target lines, %d characters:|r"):format(
+            tostring(mouseButton), down and "down" or "up", n, #text))
         for line in text:gmatch("[^\n]+") do HL:Print("|cff888888  " .. line .. "|r") end
     end)
     button:SetScript("PostClick", function()
