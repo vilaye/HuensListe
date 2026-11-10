@@ -2,14 +2,14 @@
 --
 -- Addons can't target by themselves: it has to be a secure button the player
 -- presses (key binding, /click macro or the on-screen button). The button runs a
--- macro of /targetexact lines; the last line that finds someone wins, so the most
+-- macro of /target lines; the last line that finds someone wins, so the most
 -- recently seen KOS player goes last. The macro can't change during combat, so it
 -- also lists other KOS players (the whole list if it's small) to catch people who
 -- only show up mid-fight.
 local _, HL = ...
 
 local BUTTON_NAME = "HuensListeTargetButton"
-local MAX_NAMES = 10
+local MAX_NAMES = 15
 local NEARBY_FOR = 120 -- seconds a sighting counts as "nearby"
 
 _G.BINDING_HEADER_HUENSLISTE = "Huens Liste"
@@ -18,13 +18,11 @@ _G["BINDING_NAME_CLICK " .. BUTTON_NAME .. ":LeftButton"] = "Target nearby KOS p
 local nearby = {}   -- [key] = { n = name, t = GetTime() }
 local button, pending
 
+-- In Forever only "/target First Last" works (/targetexact finds nobody, and the
+-- dashed "First-Last" form doesn't match either). /target finds nothing -> the
+-- current target stays, so only a name that's actually nearby changes it.
 local function targetLines(name)
-    -- the game knows Forever characters as "First-Last"; also try "First Last"
-    local spaced = HL.ShortName(name)
-    if spaced ~= name then
-        return "/targetexact " .. spaced .. "\n/targetexact " .. name
-    end
-    return "/targetexact " .. name
+    return "/target " .. HL.ShortName(name)
 end
 
 -- KOS names for the macro, least important first (the last match wins)
@@ -145,8 +143,8 @@ local function createButton()
     button:SetScript("PreClick", function(_, mouseButton, down)
         if not HL.debug then return end
         local text = button:GetAttribute("macrotext") or ""
-        local n = select(2, text:gsub("/targetexact", ""))
-        HL:Print(("|cff888888[target] button fired (%s, %s) – %d /targetexact lines:|r"):format(
+        local n = select(2, text:gsub("/target ", ""))
+        HL:Print(("|cff888888[target] button fired (%s, %s) – %d /target lines:|r"):format(
             tostring(mouseButton), down and "down" or "up", n))
         for line in text:gmatch("[^\n]+") do HL:Print("|cff888888  " .. line .. "|r") end
     end)

@@ -1,5 +1,8 @@
 # Huens Liste
 
+## v1.6.2
+- Fixed: the KOS target button/macro/key binding didn't target anyone. Forever only accepts `/target First Last` (not `/targetexact`), so the macro now uses that. Up to 15 names.
+
 ## v1.6.1
 - Fixed: the X button didn't close the /hl window (and the export/import window) in combat; only Escape worked
 - Kill counter: Forever's honor message ("You have been awarded 4 Honor.") has no name, so kills are now detected when a KOS player dies and you get honor / an honorable kill within a few seconds, or when they die as your target while you're fighting. `/hl debug` now shows each step of the kill detection.

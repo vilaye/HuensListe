@@ -3,6 +3,9 @@
 local _, HL = ...
 
 HL.PATCH_NOTES = {
+    { version = "1.6.2", notes = {
+        "Fixed: the KOS target button/macro now actually targets",
+    } },
     { version = "1.6.1", notes = {
         "Fixed: the X button didn't close the window in combat",
         "Fixed: KOS kills are now counted (Forever's honor messages have no name)",
