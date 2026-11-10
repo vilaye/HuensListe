@@ -486,7 +486,7 @@ local function buildListPage(parent, list)
         makeCheck(page, "Sound", "sound", { "BOTTOMLEFT", 104, 12 })
         makeCheck(page, "Share sightings", "shareSightings", { "BOTTOMLEFT", 190, 12 })
     else
-        makeCheck(page, "Alerts (group join, nearby)", "avoidAlerts", { "BOTTOMLEFT", 14, 12 })
+        makeCheck(page, "Alerts (joins your group, whispers)", "avoidAlerts", { "BOTTOMLEFT", 14, 12 })
         makeCheck(page, "Sound", "sound", { "BOTTOMLEFT", 220, 12 })
     end
 

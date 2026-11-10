@@ -92,8 +92,6 @@ function HL:UpdatePlate(unit)
     local e = kosEntryFor(unit, full)
     if not e then
         hideOverlay(plate)
-        local a = full and self:Get(full, "avoid")
-        if a then self:AvoidAlert(full, a, "is nearby") end
         return
     end
 
@@ -122,8 +120,8 @@ end
 function HL:AvoidAlert(full, e, what)
     if not self.settings.avoidAlerts then return end
     local key = HL.Key(full)
-    -- one alert per player per 2 minutes, but joining your group always alerts
-    if what ~= "joined your group" and self:Throttled("avoid:" .. key, 120) then return end
+    -- joining your group always alerts; whispers at most once per 2 minutes per player
+    if what ~= "joined your group" and self:Throttled("avoid:" .. what .. ":" .. key, 120) then return end
     self:Print(("|cffffaa00Swine List:|r %s %s%s"):format(HL.ColorName(HL.ShortName(e.n), "avoid"), what,
         e.r ~= "" and (" – " .. e.r) or ""))
     if self.settings.sound then HL.PlaySoundSafe(SOUNDKIT and (SOUNDKIT.ALARM_CLOCK_WARNING_3 or SOUNDKIT.RAID_WARNING)) end
@@ -138,11 +136,20 @@ local function checkUnit(unit)
         HL:OnSighting(full, e, unit)
         return
     end
-    local a = HL:Get(full, "avoid")
-    if a then HL:AvoidAlert(full, a, "is nearby") end
 end
 
--- Group: alert when an Avoid List player joins, or when you join a group they're in
+-- Swine List alerts only for direct contact: they join your group, you join theirs,
+-- or they whisper you. Standing next to them doesn't alert.
+
+-- Whispers
+HL:On("CHAT_MSG_WHISPER", function(msg, sender)
+    if not HL.db or HL.IsSecret(sender) or type(sender) ~= "string" then return end
+    local full = HL.SenderId(sender)
+    local a = full and HL:Get(full, "avoid")
+    if a then HL:AvoidAlert(full, a, "whispered you") end
+end)
+
+-- Group: alert when a Swine List player joins, or when you join a group they're in
 local groupMembers, wasInGroup = {}, false
 local function scanGroup()
     if not HL.db then return end

@@ -1,5 +1,8 @@
 # Huens Liste
 
+## v1.6.3
+- Swine List alerts only on direct contact: when a Swine joins your party/raid, when you join their group, or when they whisper you. Being near them no longer alerts (the tooltip line stays).
+
 ## v1.6.2
 - Fixed: the KOS target button/macro/key binding didn't target anyone. Forever only accepts `/target First Last` (not `/targetexact`), so the macro now uses that. Up to 15 names.
 
