@@ -16,7 +16,7 @@ Getting ganked? Put the ganker on the list. Everyone in your group of friends ge
 - **Right-click menu:** right-click any player and pick **Add to Huens Liste (KOS)** to add them with an optional reason
 - **List window:** add, remove, see who added whom and when each player was last seen
 - **Export/import:** share the whole list as a text string, e.g. on Discord
-- **Quality of Life tab (all options off until you turn them on):** a movable **Well Fed reminder** that shows up while you have no food buff, and a **Maelstrom Weapon alert** at 5 stacks
+- **Quality of Life tab (all options off until you turn them on):** a movable **Well Fed reminder** that shows up while you have no food buff
 - **Users tab:** see who in your group of friends has the addon, which version they run and who is online
 - **Update notice:** a popup tells you when a friend has a newer version
 - **Minimap button** and an addon compartment entry

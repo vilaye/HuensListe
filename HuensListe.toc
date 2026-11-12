@@ -14,7 +14,6 @@ Core.lua
 Comm.lua
 Nameplates.lua
 QoL.lua
-Maelstrom.lua
 Kills.lua
 Target.lua
 PatchNotes.lua

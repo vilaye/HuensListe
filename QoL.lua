@@ -169,8 +169,6 @@ end
 local QOL_DEFAULTS = {
     wellFedReminder = false,
     targetButton = false,
-    maelstromAlert = false,
-    maelstromSound = false,
 }
 
 HL:On("PLAYER_LOGIN", function()
