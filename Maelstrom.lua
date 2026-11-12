@@ -85,9 +85,13 @@ local function applyPosition()
     end
 end
 
+local DOT_SIZE, DOT_GAP = 18, 8
+local DOT_ON = { 0.3, 0.75, 1, 1 }
+local DOT_OFF = { 0.12, 0.12, 0.12, 0.85 }
+
 local function createFrame()
     frame = CreateFrame("Frame", "HuensListeMaelstromFrame", UIParent)
-    frame:SetSize(360, 56)
+    frame:SetSize(360, 84)
     frame:SetFrameStrata("MEDIUM")
     frame:SetClampedToScreen(true)
     frame:SetMovable(true)
@@ -102,21 +106,41 @@ local function createFrame()
     frame.bg:SetAllPoints()
     frame.bg:SetColorTexture(0, 0, 0, 0.55)
 
-    frame.icon = frame:CreateTexture(nil, "ARTWORK")
+    -- the big "ready" line (only at 5 stacks)
+    frame.ready = CreateFrame("Frame", nil, frame)
+    frame.ready:SetSize(360, 50)
+    frame.ready:SetPoint("TOP", 0, -2)
+    frame.icon = frame.ready:CreateTexture(nil, "ARTWORK")
     frame.icon:SetTexture(MW_ICON)
-    frame.icon:SetSize(44, 44)
-    frame.icon:SetPoint("LEFT", 6, 0)
-
-    frame.text = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    frame.icon:SetSize(40, 40)
+    frame.icon:SetPoint("LEFT", 8, 0)
+    frame.text = frame.ready:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
     frame.text:SetPoint("LEFT", frame.icon, "RIGHT", 10, 0)
     frame.text:SetTextColor(0.35, 0.75, 1)
     frame.text:SetText("MAELSTROM WEAPON " .. THRESHOLD)
+
+    -- one dot per stack
+    frame.dots = {}
+    local total = THRESHOLD * DOT_SIZE + (THRESHOLD - 1) * DOT_GAP
+    for i = 1, THRESHOLD do
+        local dot = frame:CreateTexture(nil, "ARTWORK")
+        dot:SetSize(DOT_SIZE, DOT_SIZE)
+        dot:SetPoint("BOTTOMLEFT", frame, "BOTTOM", -total / 2 + (i - 1) * (DOT_SIZE + DOT_GAP), 8)
+        dot:SetColorTexture(unpack(DOT_OFF))
+        if frame.CreateMaskTexture and dot.AddMaskTexture then
+            local mask = frame:CreateMaskTexture()
+            mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+            mask:SetAllPoints(dot)
+            dot:AddMaskTexture(mask)
+        end
+        frame.dots[i] = dot
+    end
 
     frame.hint = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     frame.hint:SetPoint("TOP", frame, "BOTTOM", 0, -2)
     frame.hint:SetText("Drag to move – click \"Lock position\" in /hl when done")
 
-    local ag = frame:CreateAnimationGroup()
+    local ag = frame.ready:CreateAnimationGroup()
     ag:SetLooping("BOUNCE")
     local a = ag:CreateAnimation("Alpha")
     a:SetFromAlpha(1)
@@ -128,13 +152,18 @@ local function createFrame()
     frame:Hide()
 end
 
-local function setVisible(show)
-    if show then
-        if not frame:IsShown() then frame:Show(); frame.anim:Play() end
+local function showStacks(stacks)
+    for i, dot in ipairs(frame.dots) do
+        dot:SetColorTexture(unpack(i <= stacks and DOT_ON or DOT_OFF))
+    end
+    local ready = stacks >= THRESHOLD
+    frame.ready:SetShown(ready)
+    if ready then
+        if not frame.anim:IsPlaying() then frame.anim:Play() end
     else
         frame.anim:Stop()
-        frame:Hide()
     end
+    frame:SetShown(stacks > 0)
 end
 
 function HL:UpdateMaelstrom()
@@ -142,9 +171,9 @@ function HL:UpdateMaelstrom()
     frame:EnableMouse(unlocked)
     frame.bg:SetShown(unlocked)
     frame.hint:SetShown(unlocked)
-    if unlocked then setVisible(true) return end
+    if unlocked then showStacks(THRESHOLD) return end
     if not self.settings.maelstromAlert then
-        setVisible(false)
+        showStacks(0)
         wasReady = false
         return
     end
@@ -164,7 +193,35 @@ function HL:UpdateMaelstrom()
         HL.PlaySoundSafe(SOUNDKIT and (SOUNDKIT.ALARM_CLOCK_WARNING_2 or SOUNDKIT.RAID_WARNING))
     end
     wasReady = ready
-    setVisible(ready)
+    showStacks(math.min(stacks, THRESHOLD))
+end
+
+-- /hl maelstrom: what does the addon see right now?
+function HL:PrintMaelstrom()
+    local stacks, how = self:MaelstromStacks()
+    self:Print("Maelstrom Weapon: " .. tostring(stacks) .. " stacks (" .. tostring(how or "not found") .. ")"
+        .. ", alert " .. (self.settings.maelstromAlert and "on" or "|cffff4040off – tick it in the Quality of Life tab|r"))
+    if not (C_UnitAuras and C_UnitAuras.GetAuraDataByIndex) then return end
+    local any = false
+    for i = 1, 255 do
+        local ok, aura = pcall(C_UnitAuras.GetAuraDataByIndex, "player", i, "HELPFUL")
+        if not ok or not aura then break end
+        local name = aura.name
+        if HL.IsSecret(name) then
+            print("  buff " .. i .. ": hidden by the game")
+            any = true
+        elseif type(name) == "string" then
+            local n = name:lower()
+            local apps = aura.applications
+            local stacky = not HL.IsSecret(apps) and (tonumber(apps) or 0) > 1
+            if n:find("maelstrom") or n:find("mahlstrom") or n:find("weapon") or stacky then
+                print(("  %s – spell %s, stacks %s"):format(name, tostring(aura.spellId),
+                    HL.IsSecret(apps) and "hidden" or tostring(apps)))
+                any = true
+            end
+        end
+    end
+    if not any then print("  (no buff that looks like Maelstrom Weapon right now)") end
 end
 
 function HL:IsMaelstromUnlocked() return unlocked end

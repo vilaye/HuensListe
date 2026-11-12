@@ -4,7 +4,7 @@ local _, HL = ...
 
 HL.PATCH_NOTES = {
     { version = "1.7.0", notes = {
-        "Quality of Life: Maelstrom Weapon alert at 5 stacks (off by default)",
+        "Quality of Life: Maelstrom Weapon stack dots + alert at 5 (off by default)",
     } },
     { version = "1.6.3", notes = {
         "Swine List only alerts when they join your group or whisper you, not when they're nearby",

@@ -1,7 +1,7 @@
 # Huens Liste
 
 ## v1.7.0
-- Quality of Life: Maelstrom Weapon alert (opt-in). A big pulsing "MAELSTROM WEAPON 5" in the middle of the screen while you have 5 stacks, optional sound, movable. Works in combat because Blizzard whitelisted the Maelstrom Weapon aura for addons.
+- Quality of Life: Maelstrom Weapon alert (opt-in). One dot per stack (from the first stack) and a big pulsing "MAELSTROM WEAPON 5" in the middle of the screen at 5 stacks, optional sound, movable. Works in combat because Blizzard whitelisted the Maelstrom Weapon aura for addons. `/hl maelstrom` shows what it sees.
 
 ## v1.6.3
 - Swine List alerts only on direct contact: when a Swine joins your party/raid, when you join their group, or when they whisper you. Being near them no longer alerts (the tooltip line stays).

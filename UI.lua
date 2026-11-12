@@ -770,6 +770,7 @@ local HELP = {
     "|cffffff00/hl swine Firstname Lastname [reason]|r – add to the Swine List (your faction)",
     "|cffffff00/hl target [reason]|r – add your target (KOS or Swine List, by faction)",
     "|cffffff00/hl move Firstname Lastname|r – move between the two lists",
+    "|cffffff00/hl maelstrom|r – show what the Maelstrom Weapon alert sees right now",
     "|cffffff00/hl macro|r – create a macro that targets the nearby KOS player",
     "|cffffff00/hl notes|r – patch notes: what's new in each version",
     "|cffffff00/hl note Firstname Lastname new note|r – change the note (or click the row in /hl)",
@@ -812,6 +813,8 @@ SlashCmdList.HUENSLISTE = function(msg)
         local name, reason = parseNameAndReason(rest)
         if not name then HL:Print("Usage: /hl " .. cmd .. " Firstname Lastname [reason]") return end
         HL:Add(name, reason, list)
+    elseif cmd == "maelstrom" or cmd == "mw" then
+        HL:PrintMaelstrom()
     elseif cmd == "macro" then
         HL:CreateTargetMacro()
     elseif cmd == "notes" or cmd == "patchnotes" or cmd == "changelog" then
