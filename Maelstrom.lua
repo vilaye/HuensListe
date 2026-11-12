@@ -6,9 +6,9 @@
 local _, HL = ...
 
 local THRESHOLD = 5
--- Maelstrom Weapon buff IDs we know of (retail, Wrath-era). Forever's version may
--- use its own ID; we also match the buff by name.
-local MW_IDS = { 344179, 187881, 53817 }
+-- Maelstrom Weapon buff IDs: Forever (408505, confirmed in game), retail, Wrath-era.
+-- Looked up directly first, because whitelisted IDs stay readable in combat.
+local MW_IDS = { 408505, 344179, 187881, 53817 }
 local MW_ICON = "Interface\\Icons\\Spell_Shaman_MaelstromWeapon"
 
 local mwNames
