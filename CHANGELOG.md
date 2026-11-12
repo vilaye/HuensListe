@@ -1,5 +1,8 @@
 # Huens Liste
 
+## v1.7.0
+- Quality of Life: Maelstrom Weapon alert (opt-in). A big pulsing "MAELSTROM WEAPON 5" in the middle of the screen while you have 5 stacks, optional sound, movable. Works in combat because Blizzard whitelisted the Maelstrom Weapon aura for addons.
+
 ## v1.6.3
 - Swine List alerts only on direct contact: when a Swine joins your party/raid, when you join their group, or when they whisper you. Being near them no longer alerts (the tooltip line stays).
 - Fixed: KOS targeting found nobody. In Forever, /target inside an addon-built macro ("macrotext") doesn't work, so Huens Liste now keeps a real WoW macro "KOS Target" up to date (out of combat) with /target lines for the KOS players you saw most recently. The key binding, the on-screen button and the macro on your bar all run it. Stays under the 255-character macro limit.

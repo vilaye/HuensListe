@@ -403,10 +403,40 @@ function HL:BuildQoLPage(parent)
     tResetBtn:SetText("Reset position")
     tResetBtn:SetScript("OnClick", function() HL:ResetTargetButtonPosition() end)
 
-    page:SetScript("OnShow", refreshMoveText)
-    -- Leaving the window locks the reminder again
+    -- Maelstrom Weapon alert
+    local msection = page:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    msection:SetPoint("TOPLEFT", 20, -296)
+    msection:SetText("Maelstrom Weapon (Enhancement Shaman)")
+
+    makeCheck(page, "Show an alert at " .. 5 .. " Maelstrom Weapon stacks", "maelstromAlert", { "TOPLEFT", 16, -314 },
+        function() HL:UpdateMaelstrom() end)
+    makeCheck(page, "Play a sound when it lights up", "maelstromSound", { "TOPLEFT", 16, -338 })
+
+    local mMoveBtn = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+    mMoveBtn:SetSize(120, 22)
+    mMoveBtn:SetPoint("TOPLEFT", 44, -366)
+    local function refreshMaelstromMoveText()
+        mMoveBtn:SetText(HL:IsMaelstromUnlocked() and "Lock position" or "Move alert")
+    end
+    mMoveBtn:SetScript("OnClick", function()
+        HL:SetMaelstromUnlocked(not HL:IsMaelstromUnlocked())
+        refreshMaelstromMoveText()
+    end)
+
+    local mResetBtn = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+    mResetBtn:SetSize(120, 22)
+    mResetBtn:SetPoint("LEFT", mMoveBtn, "RIGHT", 8, 0)
+    mResetBtn:SetText("Reset position")
+    mResetBtn:SetScript("OnClick", function() HL:ResetMaelstromPosition() end)
+
+    page:SetScript("OnShow", function()
+        refreshMoveText()
+        refreshMaelstromMoveText()
+    end)
+    -- Leaving the window locks the movable alerts again
     page:SetScript("OnHide", function()
         if HL:IsWellFedUnlocked() then HL:SetWellFedUnlocked(false) end
+        if HL:IsMaelstromUnlocked() then HL:SetMaelstromUnlocked(false) end
     end)
     return page
 end

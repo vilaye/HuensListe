@@ -3,6 +3,9 @@
 local _, HL = ...
 
 HL.PATCH_NOTES = {
+    { version = "1.7.0", notes = {
+        "Quality of Life: Maelstrom Weapon alert at 5 stacks (off by default)",
+    } },
     { version = "1.6.3", notes = {
         "Swine List only alerts when they join your group or whisper you, not when they're nearby",
         "Fixed: KOS targeting now uses a real macro \"KOS Target\" (/hl macro)",
