@@ -1,5 +1,11 @@
 # Huens Liste
 
+## v1.7.0
+- New "Log" tab (`/hl log`): recent KOS kills (red) and sightings (yellow), newest first, with who, where and when. Filters for kills/sightings. Kills are shared with friends; sightings are your own plus the ones friends reported while you were online (kept 14 days).
+- Fixed: the "Target nearby KOS" key binding did nothing unless the on-screen button was on or `/hl macro` had been used. The macro is now created as soon as a key is bound.
+- Fixed: once your full name was known, sync messages from a friend with the same first name and an identical list could be dropped as "your own echo".
+- Fixed: a possible error when the game hides a unit name in a group roster update.
+
 ## v1.6.3
 - Swine List alerts only on direct contact: when a Swine joins your party/raid, when you join their group, or when they whisper you. Being near them no longer alerts (the tooltip line stays).
 - Fixed: KOS targeting found nobody. In Forever, /target inside an addon-built macro ("macrotext") doesn't work, so Huens Liste now keeps a real WoW macro "KOS Target" up to date (out of combat) with /target lines for the KOS players you saw most recently. The key binding, the on-screen button and the macro on your bar all run it. Stays under the 255-character macro limit.

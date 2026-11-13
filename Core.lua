@@ -11,6 +11,7 @@ HL.RS = ";"   -- record separator
 local DEFAULTS = {
     entries = {},   -- [lowercase "name-realm"] = { n = "Name-Realm", r = reason, b = addedBy, t = serverTime, d = deleted }
     seen = {},      -- [key] = { t = time, z = zone, s = subzone, by = who }
+    sightLog = {},  -- recent sightings for the Log tab: { n, t, z, s, by } (local, not synced)
     avoid = {},     -- same format as entries: the Swine List (own faction)
     kills = {},     -- KOS kill credits: { n = victim, b = killer, t = time, r = zone }
     selfIds = {},   -- [character GUID] = our full name as the game sends it ("First-Last")

@@ -103,13 +103,21 @@ function HL:UpdateTargetMacro()
     if GetMacroBody(i) ~= body then EditMacro(i, MACRO_NAME, MACRO_ICON, body) end
 end
 
+-- The macro is needed as soon as anything can press the button: the on-screen
+-- button is shown, or a key is bound to it.
+local function wantsMacro()
+    if HL.settings.targetButton then return true end
+    local ok, key = pcall(GetBindingKey, "CLICK " .. BUTTON_NAME .. ":LeftButton")
+    return ok and key ~= nil
+end
+
 function HL:UpdateTargetButton()
     if not button then return end
     local _, latest = self:TargetCandidates()
     button.label:SetText(latest and HL.ShortName(latest) or "|cff888888no KOS nearby|r")
     if InCombatLockdown() then pending = true return end
     pending = false
-    if self.settings.targetButton then self:EnsureTargetMacro() end
+    if wantsMacro() then self:EnsureTargetMacro() end
     self:UpdateTargetMacro()
     applyVisibility()
 end
@@ -240,6 +248,11 @@ end)
 
 HL:On("PLAYER_REGEN_ENABLED", function()
     if pending then HL:UpdateTargetButton() end
+end)
+
+-- a key was bound to the button: make sure the macro exists
+HL:On("UPDATE_BINDINGS", function()
+    if button and not macroIndex() then HL:UpdateTargetButton() end
 end)
 
 HL:OnChange(function() HL:UpdateTargetButton() end)

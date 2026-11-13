@@ -6,6 +6,8 @@
 --   H;version;d1,..   hello with 16 bucket digests, broadcast
 --   R;0,3,7           "send me your entries in these buckets", whispered
 --   S;name;zone;sub   sighting, broadcast
+--   P;version / V;version   version ping / reply (Users tab)
+-- The Swine List uses a/u/h/r and kill credits X/Y/Z/W instead of A/U/H/R.
 local _, HL = ...
 local RS = HL.RS
 local MAX_LEN = 250
@@ -271,6 +273,7 @@ function HL:OnRemoteSighting(full, zone, sub, sender)
     if not e then return end
     zone, sub = HL.Clean(zone, 60), HL.Clean(sub, 60)
     self.db.seen[HL.Key(full)] = { t = GetServerTime(), z = zone, s = sub, by = sender }
+    if self.LogSighting then self:LogSighting(e.n, zone, sub, sender) end
     self:Fire()
     if not self.settings.sightingAlerts then return end
     if self:Throttled("remote:" .. HL.Key(full), self.settings.alertCooldown) then return end
@@ -289,9 +292,13 @@ HL:On("CHAT_MSG_ADDON", function(prefix, msg, channel, rawSender)
     -- sender is our normalized identity: use it for comparisons and display.
     local sender = HL.SenderId(rawSender)
     if sender == HL.me then return end
-    -- our own message coming back (guild/group echo): learn our full name from it
+    -- our own message coming back (guild/group echo): learn our full name from it.
+    -- Only while we don't know it yet: afterwards the check above catches our echo,
+    -- and a friend who shares our first name must not be mistaken for us.
     local myFirst = UnitName("player")
-    if channel ~= "WHISPER" and sentRecently[msg] and GetTime() - sentRecently[msg] < 30
+    local okG, guid = pcall(UnitGUID, "player")
+    local nameKnown = okG and guid and not HL.IsSecret(guid) and HL.db.selfIds[guid]
+    if not nameKnown and channel ~= "WHISPER" and sentRecently[msg] and GetTime() - sentRecently[msg] < 30
         and myFirst and not HL.IsSecret(myFirst) and HL.Key(sender):sub(1, #myFirst + 1) == HL.Key(myFirst) .. "-" then
         HL:LearnOwnName(sender)
         return

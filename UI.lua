@@ -217,6 +217,8 @@ local function makeCheck(parent, label, key, anchor, onChange)
     return cb
 end
 
+HL.MakeFS, HL.MakeCheck = makeFS, makeCheck -- used by the Log tab (Log.lua)
+
 ---------------------------------------------------------------------------
 -- Users tab: who has the addon and which version
 ---------------------------------------------------------------------------
@@ -527,14 +529,15 @@ local function createMain()
     local kosPage = buildListPage(main, "kos")
     local avoidPage = buildListPage(main, "avoid")
 
-    -- Tab 3: Quality of Life, Tab 4: Users
+    -- Tab 3: Log, then Quality of Life, Users, Patch Notes
+    local log = HL:BuildLogPage(main)
     local qol = HL:BuildQoLPage(main)
     local users = HL:BuildUsersPage(main)
     local notes = HL:BuildPatchNotesPage(main)
 
     -- Tabs below the window
-    local pages = { kosPage, avoidPage, qol, users, notes }
-    local labels = { "KOS List", "Swine List", "Quality of Life", "Users", "Patch Notes" }
+    local pages = { kosPage, avoidPage, log, qol, users, notes }
+    local labels = { "KOS List", "Swine List", "Log", "Quality of Life", "Users", "Patch Notes" }
     main.tabs = {}
     local function selectTab(id)
         for i, page in ipairs(pages) do page:SetShown(i == id) end
@@ -569,7 +572,7 @@ function HL:ToggleMain()
     main:SetShown(not main:IsShown())
 end
 
-HL.TAB_PATCH_NOTES = 5
+HL.TAB_LOG, HL.TAB_PATCH_NOTES = 3, 6
 function HL:ShowTab(id)
     if not main then createMain() end
     main:Show()
@@ -740,6 +743,7 @@ local HELP = {
     "|cffffff00/hl swine Firstname Lastname [reason]|r – add to the Swine List (your faction)",
     "|cffffff00/hl target [reason]|r – add your target (KOS or Swine List, by faction)",
     "|cffffff00/hl move Firstname Lastname|r – move between the two lists",
+    "|cffffff00/hl log|r – recent kills and sightings",
     "|cffffff00/hl macro|r – create a macro that targets the nearby KOS player",
     "|cffffff00/hl notes|r – patch notes: what's new in each version",
     "|cffffff00/hl note Firstname Lastname new note|r – change the note (or click the row in /hl)",
@@ -782,6 +786,8 @@ SlashCmdList.HUENSLISTE = function(msg)
         local name, reason = parseNameAndReason(rest)
         if not name then HL:Print("Usage: /hl " .. cmd .. " Firstname Lastname [reason]") return end
         HL:Add(name, reason, list)
+    elseif cmd == "log" then
+        HL:ShowTab(HL.TAB_LOG)
     elseif cmd == "macro" then
         HL:CreateTargetMacro()
     elseif cmd == "notes" or cmd == "patchnotes" or cmd == "changelog" then

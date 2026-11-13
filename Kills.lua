@@ -1,13 +1,14 @@
 -- Huens Liste: KOS kill counter
 --
--- Addons can't read the combat log anymore, so kills come from the honor message
--- ("Gank Lord dies, honorable kill ..."). You get that message when you or someone
--- in your group kills an enemy player. If the victim is on the KOS List, we record
--- a credit for ourselves and share it. Several friends in one group each record a
--- credit for the same kill; those count as one kill with several killers.
+-- Addons can't read the combat log anymore, and Forever's honor message has no name
+-- ("You have been awarded 4 Honor."). So a kill is: a KOS player dies in front of us
+-- (target or nameplate) and we get honor within a few seconds, or they die as our
+-- target while we're fighting. We record a credit for ourselves and share it. Several
+-- friends in one group each record a credit; those count as one kill with several killers.
 local _, HL = ...
 
 local EVENT_WINDOW = 20 -- credits for the same victim within 20 s are one kill (group members credit at once)
+HL.KILL_EVENT_WINDOW = EVENT_WINDOW
 
 ---------------------------------------------------------------------------
 -- Honor message -> victim name
@@ -75,6 +76,30 @@ function HL:KillStats(full)
         end
     end
     return count, killers, credits[#credits]
+end
+
+-- All kills, oldest first, group kills merged into one event:
+-- { kind = "kill", n = victim, t = time, z = zone, killers = { "First Last", ... } }
+function HL:KillEvents()
+    local credits = {}
+    for _, c in pairs(self:Entries("kills")) do credits[#credits + 1] = c end
+    table.sort(credits, function(a, b) return a.t < b.t end)
+    local events, open = {}, {}
+    for _, c in ipairs(credits) do
+        local key = HL.Key(c.n)
+        local ev = open[key]
+        if not ev or c.t - ev.t > EVENT_WINDOW then
+            ev = { kind = "kill", n = c.n, t = c.t, z = c.r or "", killers = {}, has = {} }
+            open[key] = ev
+            events[#events + 1] = ev
+        end
+        local who = HL.ShortName(c.b)
+        if not ev.has[who] then
+            ev.has[who] = true
+            ev.killers[#ev.killers + 1] = who
+        end
+    end
+    return events
 end
 
 -- [killer key] = KOS kills

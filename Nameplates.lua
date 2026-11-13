@@ -61,6 +61,7 @@ function HL:OnSighting(full, e, unit)
     if self:Throttled("seen:" .. key, self.settings.alertCooldown) then return end
     local zone, sub = GetZoneText() or "", GetSubZoneText() or ""
     self.db.seen[key] = { t = GetServerTime(), z = zone, s = sub, by = self.me }
+    if self.LogSighting then self:LogSighting(e.n, zone, sub, self.me) end
 
     if self.settings.alerts then
         local name = HL.ShortName(e.n)
@@ -177,7 +178,7 @@ end
 HL:On("GROUP_ROSTER_UPDATE", scanGroup)
 HL:On("PLAYER_ENTERING_WORLD", function() C_Timer.After(2, scanGroup) end)
 HL:On("UNIT_NAME_UPDATE", function(unit)
-    if unit and (unit:find("^party") or unit:find("^raid")) then scanGroup() end
+    if type(unit) == "string" and not HL.IsSecret(unit) and (unit:find("^party") or unit:find("^raid")) then scanGroup() end
 end)
 
 HL:On("NAME_PLATE_UNIT_ADDED", function(unit) HL:UpdatePlate(unit) end)
