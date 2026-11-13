@@ -14,6 +14,8 @@ local DEFAULTS = {
     sightLog = {},  -- recent sightings for the Log tab: { n, t, z, s, by } (local, not synced)
     avoid = {},     -- same format as entries: the Swine List (own faction)
     kills = {},     -- KOS kill credits: { n = victim, b = killer, t = time, r = zone }
+    deaths = {},    -- deaths to KOS players: { n = KOS killer, b = victim (one of us), t = time, r = zone }
+    info = {},      -- [key] = { c = class file ("SHAMAN"), l = level, t = time } for listed players
     selfIds = {},   -- [character GUID] = our full name as the game sends it ("First-Last")
     peers = {},     -- [key] = { n = name, v = version, t = last heard, via = channel }  (other addon users)
     settings = {
@@ -23,6 +25,7 @@ local DEFAULTS = {
         sightingAlerts = true,  -- show friends' sightings
         syncGuild = true,
         syncGroup = true,
+        guildOnly = true,       -- only accept sync from guild members (and your private channel)
         channel = "",           -- optional private sync channel
         channelPassword = "",
         alertCooldown = 60,     -- seconds between alerts for the same player
@@ -206,7 +209,9 @@ HL.LISTS.kills = {
     db = "kills", label = "Kills", color = "ff8080",
     key = function(rec) return HL.Key(rec.n) .. "|" .. HL.Key(rec.b or "") .. "|" .. tostring(rec.t) end,
 }
-HL.SYNC_ORDER = { "kos", "avoid", "kills" }
+-- Deaths to KOS players: same shape, n = the KOS player who killed, b = who died.
+HL.LISTS.deaths = { db = "deaths", label = "Deaths", color = "c070ff", key = HL.LISTS.kills.key }
+HL.SYNC_ORDER = { "kos", "avoid", "kills", "deaths" }
 
 function HL:Entries(list) return self.db[HL.LISTS[list or "kos"].db] end
 
@@ -229,6 +234,68 @@ function HL.FactionRelation(unit)
     if not ok1 or not ok2 or HL.IsSecret(theirs) or HL.IsSecret(mine) or not theirs or not mine then return end
     if theirs == "Neutral" or mine == "Neutral" then return end
     return (theirs == mine) and "friendly" or "enemy"
+end
+
+---------------------------------------------------------------------------
+-- Class and level of listed players (seen in game, shared with sightings)
+---------------------------------------------------------------------------
+function HL:NoteInfo(name, classFile, level)
+    local full = HL.NormalizeName(name)
+    if not full or not self.db then return end
+    local key = HL.Key(full)
+    local cur = self.db.info[key] or {}
+    local changed = false
+    if type(classFile) == "string" and classFile:match("^%a+$") and #classFile <= 20 then
+        classFile = classFile:upper()
+        if cur.c ~= classFile then cur.c = classFile; changed = true end
+    end
+    level = tonumber(level)
+    if level and level > 0 and level < 200 and cur.l ~= level then cur.l = level; changed = true end
+    if not changed then return end
+    cur.t = GetServerTime()
+    self.db.info[key] = cur
+    if self.RefreshList then self:RefreshList() end
+end
+
+function HL:NoteUnitInfo(unit, name)
+    local okC, _, classFile = pcall(UnitClass, unit)
+    local okL, level = pcall(UnitLevel, unit)
+    if not okC or HL.IsSecret(classFile) then classFile = nil end
+    if not okL or HL.IsSecret(level) then level = nil end
+    if classFile or level then self:NoteInfo(name, classFile, level) end
+end
+
+function HL:Info(name)
+    local full = HL.NormalizeName(name or "")
+    return full and self.db and self.db.info[HL.Key(full)] or nil
+end
+
+local function classHex(classFile)
+    local c = classFile and RAID_CLASS_COLORS and RAID_CLASS_COLORS[classFile]
+    if not c or not c.r then return end
+    return ("ff%02x%02x%02x"):format(c.r * 255, c.g * 255, c.b * 255)
+end
+
+local function className(classFile)
+    local n = LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[classFile]
+    return n or (classFile:sub(1, 1) .. classFile:sub(2):lower())
+end
+
+-- "36 Shaman" (class-colored unless plain), or nil if nothing is known
+function HL:InfoText(name, plain)
+    local i = self:Info(name)
+    if not i or not (i.c or i.l) then return end
+    local text = (i.l and tostring(i.l) or "") .. ((i.l and i.c) and " " or "") .. (i.c and className(i.c) or "")
+    local hex = not plain and classHex(i.c)
+    return hex and ("|c" .. hex .. text .. "|r") or text
+end
+
+-- display name in the class color if we know the class, else in the list color
+function HL:ColoredName(name, list)
+    local i = self:Info(name)
+    local hex = i and classHex(i.c)
+    if hex then return "|c" .. hex .. HL.ShortName(name) .. "|r" end
+    return HL.ColorName(HL.ShortName(name), list)
 end
 
 ---------------------------------------------------------------------------
@@ -486,6 +553,9 @@ local function migrate()
     end
     for k in pairs(HL.db.seen) do
         if not HL.db.entries[k] then HL.db.seen[k] = nil end
+    end
+    for k in pairs(HL.db.info) do
+        if not HL.db.entries[k] and not HL.db.avoid[k] then HL.db.info[k] = nil end
     end
     HL.digestCache = nil
     if dropped > 0 then

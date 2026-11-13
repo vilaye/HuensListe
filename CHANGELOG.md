@@ -2,6 +2,11 @@
 
 ## v1.7.0
 - New "Log" tab (`/hl log`): recent KOS kills (red) and sightings (yellow), newest first, with who, where and when. Filters for kills/sightings. Kills are shared with friends; sightings are your own plus the ones friends reported while you were online (kept 14 days).
+- Guild-only sync (on by default): sync messages are only accepted from members of your guild, plus your private sync channel. Strangers in a pickup group can no longer change your lists. Toggle in the Users tab or with `/hl trust`. If you're not in a guild, everything is accepted as before.
+- Search box and sortable columns (click a header) in the KOS and Swine lists.
+- Class and level of listed players: stored when someone sees them, shared with sightings, shown in the list (class-colored name, Lv column), tooltips and sighting alerts.
+- Deaths: when you die to a KOS player, it's recorded and shared. The KOS list shows kills / deaths, the Log shows deaths in purple. A death counts for a KOS player who was targeting you (or, if that can't be read, your target or the only KOS player around); deaths out of combat never count.
+- Quiet zones (Quality of Life tab, off by default): no KOS alerts, sharing or log entries in battlegrounds/arenas, or in cities, inns and sanctuaries.
 - Fixed: the "Target nearby KOS" key binding did nothing unless the on-screen button was on or `/hl macro` had been used. The macro is now created as soon as a key is bound.
 - Fixed: once your full name was known, sync messages from a friend with the same first name and an identical list could be dropped as "your own echo".
 - Fixed: a possible error when the game hides a unit name in a group roster update.

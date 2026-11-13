@@ -102,6 +102,30 @@ function HL:KillEvents()
     return events
 end
 
+-- Deaths to a KOS player: count, victims { [display name] = deaths }, last record
+function HL:DeathStats(full)
+    local key = HL.Key(HL.NormalizeName(full) or full)
+    local count, victims, last = 0, {}, nil
+    for _, c in pairs(self:Entries("deaths")) do
+        if HL.Key(c.n) == key then
+            count = count + 1
+            local who = HL.ShortName(c.b)
+            victims[who] = (victims[who] or 0) + 1
+            if not last or c.t > last.t then last = c end
+        end
+    end
+    return count, victims, last
+end
+
+-- { kind = "death", n = KOS killer, t = time, z = zone, victim = "First Last" }
+function HL:DeathEvents()
+    local events = {}
+    for _, c in pairs(self:Entries("deaths")) do
+        events[#events + 1] = { kind = "death", n = c.n, t = c.t, z = c.r or "", victim = HL.ShortName(c.b) }
+    end
+    return events
+end
+
 -- [killer key] = KOS kills
 function HL:KillScores()
     local scores, lastFor = {}, {}
@@ -133,6 +157,19 @@ function HL:AddKillCredit(victimName)
     if self.BroadcastEntries then self:BroadcastEntries({ rec }, "kills") end
     local count = self:KillStats(e.n)
     self:Print(("You killed %s – KOS kill #%d"):format(HL.ColorName(HL.ShortName(e.n), "kos"), count))
+end
+
+function HL:AddDeathCredit(killerName)
+    local e = self:Get(killerName, "kos")
+    if not e then return end
+    if self:Throttled("deathcredit:" .. HL.Key(e.n), 10) then return end
+    local rec = { n = e.n, b = self.me or "", t = GetServerTime(), r = HL.Clean(GetZoneText() or "", 60) }
+    if not self:Merge(rec, "deaths") then return end
+    self:Fire()
+    if self.BroadcastEntries then self:BroadcastEntries({ rec }, "deaths") end
+    local count = self:DeathStats(e.n)
+    self:Print(("|cffc070ffYou were killed by|r %s – they have killed you or your friends %d time%s"):format(
+        HL.ColorName(HL.ShortName(e.n), "kos"), count, count == 1 and "" or "s"))
 end
 
 local function debugLog(text)
@@ -225,8 +262,65 @@ HL:On("PLAYER_TARGET_CHANGED", function()
     end
 end)
 
-HL:On("PLAYER_REGEN_DISABLED", function() lastCombatTime = GetTime() end)
-HL:On("PLAYER_REGEN_ENABLED", function() lastCombatTime = GetTime() end)
+local fighting, lastFightEnd = false, 0
+HL:On("PLAYER_REGEN_DISABLED", function() lastCombatTime = GetTime(); fighting = true end)
+HL:On("PLAYER_REGEN_ENABLED", function() lastCombatTime = GetTime(); fighting = false; lastFightEnd = GetTime() end)
+
+-- You died. Addons can't see who dealt the blow, so we look at the KOS players on
+-- screen (nameplates and your target):
+--   1. KOS players who were targeting you get the credit
+--   2. if their target can't be read: your own target, if it's a KOS player
+--   3. otherwise, if exactly one KOS player is around, that one
+-- Dying out of combat (falling, drowning) never counts.
+HL:On("PLAYER_DEAD", function()
+    if not HL.db then return end
+    if not fighting and GetTime() - lastFightEnd > MATCH_WINDOW then
+        debugLog("you died out of combat – not counted")
+        return
+    end
+    local cands, order = {}, {}
+    local function consider(unit, isMyTarget)
+        local full = HL.UnitFullName(unit)
+        local e = full and HL:Get(full, "kos")
+        if not e or HL.FactionRelation(unit) == "friendly" then return end
+        local okD, dead = pcall(UnitIsDeadOrGhost, unit)
+        if okD and not HL.IsSecret(dead) and dead then return end
+        local key = HL.Key(e.n)
+        local c = cands[key]
+        if not c then
+            c = { n = e.n }
+            cands[key] = c
+            order[#order + 1] = c
+        end
+        local okT, onMe = pcall(UnitIsUnit, unit .. "target", "player")
+        if okT and not HL.IsSecret(onMe) then
+            c.readable = true
+            if onMe then c.onMe = true end
+        end
+        if isMyTarget then c.myTarget = true end
+    end
+    for unit in pairs(HL.kosPlates or {}) do consider(unit) end
+    consider("target", true)
+    if #order == 0 then return end
+
+    local killers, why = {}, "was targeting you"
+    for _, c in ipairs(order) do if c.onMe then killers[#killers + 1] = c end end
+    if #killers == 0 then
+        why = "was your target"
+        for _, c in ipairs(order) do
+            if c.myTarget and not c.readable then killers[#killers + 1] = c end
+        end
+    end
+    if #killers == 0 and #order == 1 and not order[1].readable then
+        why = "the only KOS player around"
+        killers[1] = order[1]
+    end
+    if #killers == 0 then debugLog("you died with KOS players around, but none was on you – not counted") end
+    for _, c in ipairs(killers) do
+        debugLog("death counted for " .. HL.ShortName(c.n) .. " (" .. why .. ")")
+        HL:AddDeathCredit(c.n)
+    end
+end)
 
 local WATCHED = { target = true, focus = true, mouseover = true }
 local function watched(unit)

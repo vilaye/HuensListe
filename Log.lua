@@ -1,6 +1,6 @@
--- Huens Liste: log of recent KOS kills and sightings ("Log" tab, /hl log)
+-- Huens Liste: log of recent KOS kills, deaths and sightings ("Log" tab, /hl log)
 --
--- Kills come from the synced kill credits (everyone sees the same kills).
+-- Kills and deaths come from the synced records (everyone sees the same ones).
 -- Sightings are kept locally: your own plus the ones friends broadcast while
 -- you were online.
 local _, HL = ...
@@ -37,9 +37,15 @@ function HL:ClearSightingLog()
     self:RefreshLog()
 end
 
--- Newest first: { kind = "kill" | "seen", n, t, z, s, by / killers }
-function HL:LogItems(showKills, showSightings)
-    local items, kills, sightings = {}, 0, 0
+-- Newest first: { kind = "kill" | "death" | "seen", n, t, z, s, by / killers / victim }
+function HL:LogItems(showKills, showSightings, showDeaths)
+    local items, kills, sightings, deaths = {}, 0, 0, 0
+    if showDeaths then
+        for _, ev in ipairs(self:DeathEvents()) do
+            items[#items + 1] = ev
+            deaths = deaths + 1
+        end
+    end
     if showKills then
         for _, ev in ipairs(self:KillEvents()) do
             items[#items + 1] = ev
@@ -56,7 +62,7 @@ function HL:LogItems(showKills, showSightings)
         if a.t ~= b.t then return a.t > b.t end
         return a.kind < b.kind -- a kill and a sighting in the same second: kill first
     end)
-    return items, kills, sightings
+    return items, kills, sightings, deaths
 end
 
 local function place(zone, sub)
@@ -73,6 +79,7 @@ end
 HL:On("PLAYER_LOGIN", function()
     if HL.settings.logKills == nil then HL.settings.logKills = true end
     if HL.settings.logSightings == nil then HL.settings.logSightings = true end
+    if HL.settings.logDeaths == nil then HL.settings.logDeaths = true end
     local now, fresh = GetServerTime(), {}
     for _, s in ipairs(HL.db.sightLog) do
         if type(s) == "table" and s.n and s.t and now - s.t <= SIGHTING_MAX_AGE then fresh[#fresh + 1] = s end
@@ -104,6 +111,9 @@ local function getRow(i)
         if it.kind == "kill" then
             GameTooltip:AddLine("|cffff4040Kill:|r " .. HL.ShortName(it.n))
             GameTooltip:AddLine("Killed by " .. table.concat(it.killers, ", "), 1, 1, 1, true)
+        elseif it.kind == "death" then
+            GameTooltip:AddLine("|cffc070ffDeath:|r " .. it.victim)
+            GameTooltip:AddLine("Killed by " .. HL.ShortName(it.n), 1, 1, 1)
         else
             GameTooltip:AddLine("|cffffd100Sighting:|r " .. HL.ShortName(it.n))
             GameTooltip:AddLine("Spotted by " .. HL.ShortName(it.by), 1, 1, 1)
@@ -111,6 +121,8 @@ local function getRow(i)
         local where = place(it.z, it.s)
         if where ~= "" then GameTooltip:AddLine(where, 1, 0.82, 0, true) end
         GameTooltip:AddLine(date("%d.%m.%Y %H:%M:%S", it.t) .. " (" .. HL.Ago(it.t) .. ")", 0.7, 0.7, 0.7)
+        local info = HL:InfoText(it.n)
+        if info then GameTooltip:AddLine(HL.ShortName(it.n) .. ": " .. info, 0.7, 0.7, 0.7) end
         local e = HL:Get(it.n, "kos")
         if e and e.r ~= "" then GameTooltip:AddLine("Note: " .. e.r, 0.7, 0.7, 0.7, true) end
         GameTooltip:Show()
@@ -122,7 +134,8 @@ end
 
 function HL:RefreshLog()
     if not page or not page:IsVisible() then return end
-    local items, kills, sightings = self:LogItems(self.settings.logKills, self.settings.logSightings)
+    local items, kills, sightings, deaths = self:LogItems(self.settings.logKills, self.settings.logSightings,
+        self.settings.logDeaths)
     local shown = math.min(#items, MAX_ROWS)
     for i = 1, shown do
         local it = items[i]
@@ -135,6 +148,11 @@ function HL:RefreshLog()
             r.tag:SetText("|cffff4040KILL|r")
             r.text:SetText(("|cffff6060%s|r killed by |cffffffff%s|r%s"):format(HL.ShortName(it.n),
                 table.concat(it.killers, ", "), where ~= "" and (" – " .. where) or ""))
+        elseif it.kind == "death" then
+            r.bg:SetColorTexture(0.45, 0.1, 0.65, 0.30)
+            r.tag:SetText("|cffc070ffDIED|r")
+            r.text:SetText(("|cffffffff%s|r killed by |cffff6060%s|r%s"):format(it.victim, HL.ShortName(it.n),
+                where ~= "" and (" – " .. where) or ""))
         else
             r.bg:SetColorTexture(1, 1, 1, (i % 2 == 0) and 0.05 or 0)
             r.tag:SetText("|cffffd100Seen|r")
@@ -145,7 +163,7 @@ function HL:RefreshLog()
     end
     for i = shown + 1, #rows do rows[i]:Hide() end
     content:SetHeight(math.max(1, shown * ROW_H))
-    page.summary:SetText(("|cffff4040%d kills|r, |cffffd100%d sightings|r%s"):format(kills, sightings,
+    page.summary:SetText(("|cffff4040%d kills|r, |cffc070ff%d deaths|r, |cffffd100%d sightings|r%s"):format(kills, deaths, sightings,
         #items > MAX_ROWS and (" – newest " .. MAX_ROWS .. " shown") or ""))
     page.empty:SetShown(shown == 0)
 end
@@ -156,7 +174,7 @@ function HL:BuildLogPage(parent)
 
     local header = page:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     header:SetPoint("TOPLEFT", 20, -36)
-    header:SetText("Recent kills and sightings")
+    header:SetText("Recent activity")
 
     page.summary = page:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     page.summary:SetPoint("TOPRIGHT", -16, -40)
@@ -177,10 +195,11 @@ function HL:BuildLogPage(parent)
 
     page.empty = page:CreateFontString(nil, "OVERLAY", "GameFontDisable")
     page.empty:SetPoint("CENTER", 0, 10)
-    page.empty:SetText("Nothing yet. Kills and sightings of KOS players show up here.")
+    page.empty:SetText("Nothing yet. Kills, deaths and sightings of KOS players show up here.")
 
     HL.MakeCheck(page, "Kills", "logKills", { "BOTTOMLEFT", 14, 12 }, function() HL:RefreshLog() end)
-    HL.MakeCheck(page, "Sightings", "logSightings", { "BOTTOMLEFT", 104, 12 }, function() HL:RefreshLog() end)
+    HL.MakeCheck(page, "Deaths", "logDeaths", { "BOTTOMLEFT", 84, 12 }, function() HL:RefreshLog() end)
+    HL.MakeCheck(page, "Sightings", "logSightings", { "BOTTOMLEFT", 166, 12 }, function() HL:RefreshLog() end)
 
     local clear = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
     clear:SetSize(120, 22)

@@ -56,8 +56,30 @@ local function safeUnitInfo(unit)
     return ""
 end
 
+-- Quiet zones (Quality of Life, opt-in): no KOS alerts, sharing or log entries in
+-- battlegrounds/arenas, or in cities, inns and sanctuaries. The skull still shows.
+function HL:InQuietZone()
+    local s = self.settings
+    if s.quietPvP then
+        local ok, _, kind = pcall(IsInInstance)
+        if ok and not HL.IsSecret(kind) and (kind == "pvp" or kind == "arena") then return true end
+    end
+    if s.quietCities then
+        local ok, resting = pcall(IsResting)
+        if ok and not HL.IsSecret(resting) and resting then return true end
+        local zoneInfo = (C_PvP and C_PvP.GetZonePVPInfo) or GetZonePVPInfo
+        if zoneInfo then
+            local ok2, pvpType = pcall(zoneInfo)
+            if ok2 and not HL.IsSecret(pvpType) and pvpType == "sanctuary" then return true end
+        end
+    end
+    return false
+end
+
 function HL:OnSighting(full, e, unit)
     local key = HL.Key(full)
+    if unit then self:NoteUnitInfo(unit, e.n) end
+    if self:InQuietZone() then return end
     if self:Throttled("seen:" .. key, self.settings.alertCooldown) then return end
     local zone, sub = GetZoneText() or "", GetSubZoneText() or ""
     self.db.seen[key] = { t = GetServerTime(), z = zone, s = sub, by = self.me }
@@ -74,12 +96,15 @@ function HL:OnSighting(full, e, unit)
     end
 
     if self.settings.shareSightings and self.Broadcast then
-        self:Broadcast("S" .. HL.RS .. e.n .. HL.RS .. HL.Clean(zone, 60) .. HL.RS .. HL.Clean(sub, 60), "high")
+        local i = self:Info(e.n) or {}
+        self:Broadcast(table.concat({ "S", e.n, HL.Clean(zone, 60), HL.Clean(sub, 60), i.c or "", tostring(i.l or "") }, HL.RS), "high")
     end
 end
 
 -- The KOS skull only goes on enemy-faction players. If the faction can't be read
 -- (rare), we still mark them, so a real enemy is never missed.
+HL.kosPlates = {} -- [nameplate unit] = KOS name, for the plates on screen right now
+
 local function kosEntryFor(unit, full)
     local e = full and HL:Get(full, "kos")
     if e and HL.FactionRelation(unit) ~= "friendly" then return e end
@@ -91,6 +116,7 @@ function HL:UpdatePlate(unit)
     if not plateUsable(plate) then return end
     local full = HL.UnitFullName(unit)
     local e = kosEntryFor(unit, full)
+    if not HL.IsSecret(unit) then HL.kosPlates[unit] = e and e.n or nil end
     if not e then
         hideOverlay(plate)
         return
@@ -137,6 +163,7 @@ local function checkUnit(unit)
         HL:OnSighting(full, e, unit)
         return
     end
+    if HL:Get(full, "avoid") then HL:NoteUnitInfo(unit, full) end
 end
 
 -- Swine List alerts only for direct contact: they join your group, you join theirs,
@@ -167,6 +194,7 @@ local function scanGroup()
                 current[key] = true
                 if not groupMembers[key] then
                     local a = HL:Get(full, "avoid")
+                    if a then HL:NoteUnitInfo(unit, full) end
                     if a then HL:AvoidAlert(full, a, wasInGroup and "joined your group" or "is in this group") end
                 end
             end
@@ -183,6 +211,7 @@ end)
 
 HL:On("NAME_PLATE_UNIT_ADDED", function(unit) HL:UpdatePlate(unit) end)
 HL:On("NAME_PLATE_UNIT_REMOVED", function(unit)
+    if unit and not HL.IsSecret(unit) then HL.kosPlates[unit] = nil end
     local plate = C_NamePlate.GetNamePlateForUnit(unit)
     if plateUsable(plate) then hideOverlay(plate) end
 end)
@@ -222,6 +251,8 @@ if TooltipDataProcessor and Enum and Enum.TooltipDataType then
         if list == "kos" then
             local count = HL:KillStats(e.n)
             if count > 0 then tt:AddLine(("Killed %d time%s"):format(count, count == 1 and "" or "s"), 1, 0.5, 0.5) end
+            local deaths = HL:DeathStats(e.n)
+            if deaths > 0 then tt:AddLine(("Killed you or friends %d time%s"):format(deaths, deaths == 1 and "" or "s"), 0.75, 0.45, 1) end
         end
         tt:AddLine("added by " .. HL.ShortName(e.b) .. " on " .. date("%d.%m.%Y", e.t), 0.6, 0.6, 0.6)
     end)

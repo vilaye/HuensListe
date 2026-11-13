@@ -8,7 +8,9 @@ Getting ganked? Put the ganker on the list. Everyone in your group of friends ge
 - **Two lists:** the **KOS List** for the enemy faction and the **Swine List** for toxic players of your own faction
 - **Swine List alerts:** chat message + sound when someone on it joins your party/raid, when you join their group, or when they whisper you
 - **Target nearby KOS:** key binding, macro or on-screen button that targets the KOS player you saw most recently
-- **Log:** recent kills and sightings in one tab, kills highlighted in red
+- **Log:** recent kills, deaths and sightings in one tab, color-coded
+- **Search and sort** the lists; class and level of listed players; kills / deaths per KOS player
+- **Guild-only sync** by default, so strangers can't change your lists
 - **Kill counter:** honorable kills on KOS players are counted and shared; see who killed whom and who has the most KOS kills
 - **Nameplate marker:** a skull and "KILL ON SIGHT" above every listed player
 - **Alerts:** a raid warning plus a sound when a listed player appears near you (nameplate, target or mouseover)
@@ -55,7 +57,7 @@ Getting ganked? Put the ganker on the list. Everyone in your group of friends ge
 ## How syncing works
 Addons can't reach the internet, so every copy of the list syncs peer-to-peer in-game. Adds and removals go out right away. Every 5 minutes, on login and when joining a group, clients compare a short checksum and exchange only what differs. When two people edit the same entry, the newest change wins.
 
-**Note:** everyone you sync with (guild, group, channel) can add and remove entries. In a large guild, turn off guild sync (`/hl guild off`) and use a private channel with a password.
+**Who can edit:** by default only members of your guild (and people in your private channel) are synced with; `/hl trust off` accepts group members from other guilds too. Everyone you sync with can add and remove entries. In a large guild, turn off guild sync (`/hl guild off`) and use a private channel with a password.
 
 ## Limitations
 WoW: Forever uses Midnight's addon restrictions, so addons can no longer read the combat log. Huens Liste detects players through **nameplates, target and mouseover** and turns on enemy nameplates at login.

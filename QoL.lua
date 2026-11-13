@@ -169,6 +169,8 @@ end
 local QOL_DEFAULTS = {
     wellFedReminder = false,
     targetButton = false,
+    quietPvP = false,
+    quietCities = false,
 }
 
 HL:On("PLAYER_LOGIN", function()

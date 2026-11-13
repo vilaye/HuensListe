@@ -4,7 +4,12 @@ local _, HL = ...
 
 HL.PATCH_NOTES = {
     { version = "1.7.0", notes = {
-        "New Log tab: recent kills (red) and sightings (/hl log)",
+        "New Log tab: recent kills, deaths and sightings (/hl log)",
+        "Sync only with guild members by default (Users tab, /hl trust)",
+        "Search and sortable columns in the KOS and Swine lists",
+        "Class and level of listed players",
+        "Deaths to KOS players are counted (K / D column)",
+        "Quiet zones for battlegrounds and cities (Quality of Life, off by default)",
         "Fixed: the KOS target key binding works without creating the macro first",
         "Fixed: a friend with your first name could be mistaken for you",
     } },

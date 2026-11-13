@@ -7,7 +7,8 @@
 --   R;0,3,7           "send me your entries in these buckets", whispered
 --   S;name;zone;sub   sighting, broadcast
 --   P;version / V;version   version ping / reply (Users tab)
--- The Swine List uses a/u/h/r and kill credits X/Y/Z/W instead of A/U/H/R.
+-- The Swine List uses a/u/h/r, kill credits X/Y/Z/W and deaths K/L/M/N instead of A/U/H/R.
+-- Sightings may carry class and level: S;name;zone;sub;CLASS;level
 local _, HL = ...
 local RS = HL.RS
 local MAX_LEN = 250
@@ -106,6 +107,7 @@ local KINDS = {
     kos   = { A = "A", U = "U", H = "H", R = "R" },
     avoid = { A = "a", U = "u", H = "h", R = "r" },
     kills = { A = "X", U = "Y", H = "Z", R = "W" },
+    deaths = { A = "K", U = "L", H = "M", R = "N" },
 }
 local KIND_INFO = {} -- "a" -> { list = "avoid", base = "A" }
 for list, m in pairs(KINDS) do
@@ -206,6 +208,44 @@ local function answerPing(rawSender, sender)
 end
 
 ---------------------------------------------------------------------------
+-- Trust: with "guild only" on, we only listen to guild members. A message on
+-- guild chat proves membership; for whispers and group chat we check the guild
+-- roster and who we've already heard on guild chat. Your private sync channel
+-- (name + password you set yourself) is always trusted. Without a guild there
+-- is nobody to check against, so everything is accepted as before.
+---------------------------------------------------------------------------
+local guildSeen, roster, rosterAt = {}, {}, 0
+
+local function refreshRoster()
+    if GetTime() - rosterAt < 10 then return end
+    rosterAt = GetTime()
+    local ok, n = pcall(GetNumGuildMembers)
+    if not ok or type(n) ~= "number" or HL.IsSecret(n) then return end
+    local fresh = {}
+    for i = 1, n do
+        local ok2, name = pcall(GetGuildRosterInfo, i)
+        if ok2 and type(name) == "string" and not HL.IsSecret(name) then
+            fresh[HL.Key(HL.SenderId(name))] = true
+        end
+    end
+    roster = fresh
+end
+
+function HL:IsTrusted(sender, channel)
+    local key = HL.Key(sender)
+    if channel == "GUILD" then guildSeen[key] = true return true end
+    if not self.settings.guildOnly then return true end
+    if channel == "CHANNEL" then return true end
+    local ok, inGuild = pcall(IsInGuild)
+    if not ok or not inGuild then return true end
+    if guildSeen[key] or roster[key] then return true end
+    refreshRoster()
+    return roster[key] or false
+end
+
+HL:On("GUILD_ROSTER_UPDATE", function() rosterAt = 0; refreshRoster() end)
+
+---------------------------------------------------------------------------
 -- Update notice: a friend has a newer version -> popup once per session,
 -- remembered across logins until you've updated.
 ---------------------------------------------------------------------------
@@ -267,18 +307,21 @@ local function noteSynced(n)
     end)
 end
 
-function HL:OnRemoteSighting(full, zone, sub, sender)
+function HL:OnRemoteSighting(full, zone, sub, sender, classFile, level)
     full = HL.NormalizeName(full)
     local e = full and self:Get(full)
     if not e then return end
     zone, sub = HL.Clean(zone, 60), HL.Clean(sub, 60)
+    self:NoteInfo(e.n, classFile, level)
     self.db.seen[HL.Key(full)] = { t = GetServerTime(), z = zone, s = sub, by = sender }
     if self.LogSighting then self:LogSighting(e.n, zone, sub, sender) end
     self:Fire()
     if not self.settings.sightingAlerts then return end
     if self:Throttled("remote:" .. HL.Key(full), self.settings.alertCooldown) then return end
-    self:Print(("|cffff4040%s|r spotted in |cffffff00%s%s|r by %s"):format(
-        HL.ShortName(full), zone, (sub ~= "" and sub ~= zone) and (" – " .. sub) or "", HL.ShortName(sender)))
+    local info = self:InfoText(e.n)
+    self:Print(("|cffff4040%s|r%s spotted in |cffffff00%s%s|r by %s"):format(
+        HL.ShortName(full), info and (" (" .. info .. ")") or "", zone,
+        (sub ~= "" and sub ~= zone) and (" – " .. sub) or "", HL.ShortName(sender)))
     if self.settings.sound then HL.PlaySoundSafe(SOUNDKIT and SOUNDKIT.TELL_MESSAGE) end
 end
 
@@ -301,6 +344,11 @@ HL:On("CHAT_MSG_ADDON", function(prefix, msg, channel, rawSender)
     if not nameKnown and channel ~= "WHISPER" and sentRecently[msg] and GetTime() - sentRecently[msg] < 30
         and myFirst and not HL.IsSecret(myFirst) and HL.Key(sender):sub(1, #myFirst + 1) == HL.Key(myFirst) .. "-" then
         HL:LearnOwnName(sender)
+        return
+    end
+
+    if not HL:IsTrusted(sender, channel) then
+        if HL.debug then HL:Print("|cff888888ignored: " .. HL.ShortName(sender) .. " is not in your guild|r") end
         return
     end
 
@@ -328,7 +376,7 @@ HL:On("CHAT_MSG_ADDON", function(prefix, msg, channel, rawSender)
         local changed = {}
         for i = 2, #parts do
             local rec = HL.Deserialize(parts[i])
-            local before = rec and list ~= "kills" and HL:Get(rec.n, list)
+            local before = rec and not HL.LISTS[list].key and HL:Get(rec.n, list)
             if rec and HL:Merge(rec, list) then
                 rec.wasOnList = before and true or nil
                 changed[#changed + 1] = rec
@@ -336,12 +384,18 @@ HL:On("CHAT_MSG_ADDON", function(prefix, msg, channel, rawSender)
         end
         if #changed == 0 then return end
         HL:Fire()
-        if list == "kills" then
+        if list == "kills" or list == "deaths" then
             if base == "A" then
                 for _, rec in ipairs(changed) do
-                    local count = HL:KillStats(rec.n)
-                    HL:Print(("%s killed %s – KOS kill #%d%s"):format(HL.ShortName(rec.b), HL.ColorName(HL.ShortName(rec.n), "kos"),
-                        count, rec.r ~= "" and (" in " .. rec.r) or ""))
+                    local where = rec.r ~= "" and (" in " .. rec.r) or ""
+                    if list == "kills" then
+                        local count = HL:KillStats(rec.n)
+                        HL:Print(("%s killed %s – KOS kill #%d%s"):format(HL.ShortName(rec.b),
+                            HL.ColorName(HL.ShortName(rec.n), "kos"), count, where))
+                    else
+                        HL:Print(("|cffc070ff%s was killed by|r %s%s"):format(HL.ShortName(rec.b),
+                            HL.ColorName(HL.ShortName(rec.n), "kos"), where))
+                    end
                 end
             else
                 noteSynced(#changed)
@@ -401,7 +455,7 @@ HL:On("CHAT_MSG_ADDON", function(prefix, msg, channel, rawSender)
         whisperEntries(HL:EntriesInBuckets(set, list), rawSender, list)
 
     elseif kind == "S" then
-        HL:OnRemoteSighting(parts[2], parts[3], parts[4], sender)
+        HL:OnRemoteSighting(parts[2], parts[3], parts[4], sender, parts[5], parts[6])
     end
 end)
 
@@ -417,6 +471,7 @@ HL:On("PLAYER_LOGIN", function()
         end
     end
     HL.db.peers = fresh
+    if C_GuildInfo and C_GuildInfo.GuildRoster then pcall(C_GuildInfo.GuildRoster) end
     C_Timer.After(8, function() HL:JoinSyncChannel() end)
     C_Timer.After(15, function() HL:SendHello() end)
     C_Timer.After(20, function() HL:PingUsers() end)

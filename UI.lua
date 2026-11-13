@@ -107,11 +107,11 @@ local function getRow(page, i)
     r.bg = r:CreateTexture(nil, "BACKGROUND")
     r.bg:SetAllPoints()
     r.bg:SetColorTexture(1, 1, 1, (i % 2 == 0) and 0.05 or 0)
-    r.name = makeFS(r, 4, 130, "GameFontNormal")
-    if list == "kos" then r.name:SetTextColor(1, 0.3, 0.3) else r.name:SetTextColor(1, 0.67, 0) end
-    r.reason = makeFS(r, 140, 150, "GameFontHighlightSmall")
-    r.by = makeFS(r, 296, 92, "GameFontDisableSmall")
-    r.kills = makeFS(r, 392, 36, "GameFontHighlight")
+    r.name = makeFS(r, 4, 126, "GameFontNormal")
+    r.level = makeFS(r, 132, 24, "GameFontHighlightSmall")
+    r.reason = makeFS(r, 160, 132, "GameFontHighlightSmall")
+    r.by = makeFS(r, 296, 88, "GameFontDisableSmall")
+    r.kills = makeFS(r, 386, 44, "GameFontHighlightSmall")
     r.when = makeFS(r, 432, 60, "GameFontDisableSmall")
 
     r.del = CreateFrame("Button", nil, r, "UIPanelCloseButton")
@@ -140,7 +140,9 @@ local function getRow(page, i)
         local e, s = self.entry, self.seenData
         if not e then return end
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:AddLine(HL.ColorName(e.n, list))
+        GameTooltip:AddLine(HL:ColoredName(e.n, list))
+        local info = HL:InfoText(e.n)
+        if info then GameTooltip:AddLine("Level " .. info) end
         if e.r ~= "" then GameTooltip:AddLine(e.r, 1, 1, 1, true) end
         GameTooltip:AddLine("Added by " .. HL.ShortName(e.b) .. " on " .. date("%d.%m.%Y %H:%M", e.t), 0.7, 0.7, 0.7)
         if list == "kos" then
@@ -151,6 +153,13 @@ local function getRow(page, i)
                 table.sort(parts)
                 GameTooltip:AddLine(("Killed %d time%s – by %s"):format(count, count == 1 and "" or "s", table.concat(parts, ", ")), 1, 0.5, 0.5, true)
                 GameTooltip:AddLine("Last kill " .. HL.Ago(last.t) .. (last.r ~= "" and (" in " .. last.r) or ""), 0.7, 0.7, 0.7)
+            end
+            local deaths, victims = HL:DeathStats(e.n)
+            if deaths > 0 then
+                local parts = {}
+                for who, n in pairs(victims) do parts[#parts + 1] = who .. " (" .. n .. ")" end
+                table.sort(parts)
+                GameTooltip:AddLine(("Killed us %d time%s – %s"):format(deaths, deaths == 1 and "" or "s", table.concat(parts, ", ")), 0.75, 0.45, 1, true)
             end
         end
         if s then
@@ -167,21 +176,71 @@ local function getRow(page, i)
     return r
 end
 
+-- Sort keys for the list columns. "added" (newest first) is the default.
+local SORTS = {
+    added  = function(x) return x.e.t end,
+    name   = function(x) return HL.ShortName(x.e.n):lower() end,
+    level  = function(x) return x.level end,
+    reason = function(x) return x.e.r:lower() end,
+    by     = function(x) return HL.ShortName(x.e.b):lower() end,
+    kills  = function(x) return x.kills * 1000 + x.deaths end,
+    when   = function(x) return x.when end,
+}
+
 local function refreshListPage(page)
     local list = page.list
-    local entries = {}
+    local filter = page.filter
+    local items, total = {}, 0
     for _, e in pairs(HL:Entries(list)) do
-        if not e.d then entries[#entries + 1] = e end
+        if not e.d then
+            total = total + 1
+            local match = true
+            if filter and filter ~= "" then
+                local hay = (HL.ShortName(e.n) .. " " .. e.r .. " " .. HL.ShortName(e.b) .. " "
+                    .. (HL:InfoText(e.n, true) or "")):lower()
+                match = hay:find(filter, 1, true) ~= nil
+            end
+            if match then
+                local info = HL:Info(e.n)
+                local s = (list == "kos") and HL.db.seen[HL.Key(e.n)] or nil
+                local x = { e = e, seen = s, level = info and info.l or 0, kills = 0, deaths = 0 }
+                if list == "kos" then
+                    x.kills = HL:KillStats(e.n)
+                    x.deaths = HL:DeathStats(e.n)
+                    x.when = s and s.t or 0
+                else
+                    x.when = e.t
+                end
+                items[#items + 1] = x
+            end
+        end
     end
-    table.sort(entries, function(a, b) return a.t > b.t end)
-    for i, e in ipairs(entries) do
+    local get = SORTS[page.sortKey] or SORTS.added
+    local desc = page.sortDesc
+    table.sort(items, function(a, b)
+        local va, vb = get(a), get(b)
+        if va ~= vb then
+            if desc then return va > vb end
+            return va < vb
+        end
+        if a.e.t ~= b.e.t then return a.e.t > b.e.t end
+        return a.e.n < b.e.n
+    end)
+    for i, x in ipairs(items) do
+        local e, s = x.e, x.seen
         local r = getRow(page, i)
-        local s = (list == "kos") and HL.db.seen[HL.Key(e.n)] or nil
         r.full, r.entry, r.seenData = e.n, e, s
-        r.name:SetText(HL.ShortName(e.n))
+        r.name:SetText(HL:ColoredName(e.n, list))
+        r.level:SetText(x.level > 0 and tostring(x.level) or "")
         r.reason:SetText(e.r)
         r.by:SetText(HL.ShortName(e.b))
-        r.kills:SetText(list == "kos" and (function() local c = HL:KillStats(e.n) return c > 0 and tostring(c) or "|cff666666-|r" end)() or "")
+        if list ~= "kos" then
+            r.kills:SetText("")
+        elseif x.kills == 0 and x.deaths == 0 then
+            r.kills:SetText("|cff666666-|r")
+        else
+            r.kills:SetText(("|cffff6060%d|r |cff888888/|r |cffc070ff%d|r"):format(x.kills, x.deaths))
+        end
         if list == "kos" then
             r.when:SetText(s and HL.Ago(s.t) or "-")
         else
@@ -189,9 +248,13 @@ local function refreshListPage(page)
         end
         r:Show()
     end
-    for i = #entries + 1, #page.rows do page.rows[i]:Hide() end
-    page.content:SetHeight(math.max(1, #entries * ROW_H))
-    page.count:SetText(#entries .. " on the " .. HL.ListLabel(list))
+    for i = #items + 1, #page.rows do page.rows[i]:Hide() end
+    page.content:SetHeight(math.max(1, #items * ROW_H))
+    if #items ~= total then
+        page.count:SetText(#items .. " of " .. total .. " on the " .. HL.ListLabel(list))
+    else
+        page.count:SetText(total .. " on the " .. HL.ListLabel(list))
+    end
 end
 
 function HL:RefreshList()
@@ -323,6 +386,8 @@ function HL:BuildUsersPage(parent)
     usersContent:SetSize(540, 1)
     scroll:SetScrollChild(usersContent)
 
+    makeCheck(page, "Only sync with members of my guild (and my private channel)", "guildOnly", { "BOTTOMLEFT", 14, 12 })
+
     local refresh = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
     refresh:SetSize(110, 22)
     refresh:SetPoint("BOTTOMRIGHT", -12, 12)
@@ -405,6 +470,14 @@ function HL:BuildQoLPage(parent)
     tResetBtn:SetText("Reset position")
     tResetBtn:SetScript("OnClick", function() HL:ResetTargetButtonPosition() end)
 
+    -- Quiet zones
+    local qsection = page:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    qsection:SetPoint("TOPLEFT", 20, -296)
+    qsection:SetText("Quiet zones (no KOS alerts, sharing or log entries; the skull still shows)")
+
+    makeCheck(page, "Quiet in battlegrounds and arenas", "quietPvP", { "TOPLEFT", 16, -314 })
+    makeCheck(page, "Quiet in cities, inns and sanctuaries", "quietCities", { "TOPLEFT", 16, -338 })
+
     page:SetScript("OnShow", refreshMoveText)
     -- Leaving the window locks the reminder again
     page:SetScript("OnHide", function()
@@ -468,16 +541,64 @@ local function buildListPage(parent, list)
     nameBox:SetScript("OnEscapePressed", nameBox.ClearFocus)
     reasonBox:SetScript("OnEscapePressed", reasonBox.ClearFocus)
 
-    local headers = { { "Name", 16 }, { "Reason", 152 }, { "Added by", 308 },
-        { list == "kos" and "Kills" or "", 404 }, { list == "kos" and "Last seen" or "Added", 444 } }
+    -- Search
+    local searchLabel = page:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    searchLabel:SetPoint("TOPLEFT", 20, -77)
+    searchLabel:SetText("Search:")
+    local searchBox = CreateFrame("EditBox", nil, page, "InputBoxTemplate")
+    searchBox:SetSize(180, 20)
+    searchBox:SetPoint("TOPLEFT", 72, -72)
+    searchBox:SetAutoFocus(false)
+    searchBox:SetScript("OnTextChanged", function(self)
+        page.filter = strtrim(self:GetText() or ""):lower()
+        if page:IsVisible() then refreshListPage(page) end
+    end)
+    searchBox:SetScript("OnEscapePressed", function(self) self:SetText(""); self:ClearFocus() end)
+    searchBox:SetScript("OnEnterPressed", searchBox.ClearFocus)
+    local searchHint = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    searchHint:SetPoint("LEFT", searchBox, "RIGHT", 10, 0)
+    searchHint:SetText("name, note, class – click a column to sort")
+
+    -- Column headers: click to sort, click again to reverse
+    page.sortKey, page.sortDesc = "added", true
+    local arrow = page:CreateTexture(nil, "OVERLAY")
+    arrow:SetTexture("Interface\\Buttons\\UI-SortArrow")
+    arrow:SetSize(9, 8)
+    arrow:Hide()
+    local headers = { { "Name", 16, "name" }, { "Lv", 144, "level" }, { "Reason", 172, "reason" }, { "Added by", 308, "by" } }
+    if list == "kos" then
+        headers[#headers + 1] = { "K / D", 398, "kills" }
+        headers[#headers + 1] = { "Last seen", 444, "when" }
+    else
+        headers[#headers + 1] = { "Added", 444, "when" }
+    end
+    -- text columns start A-Z, number and time columns start with the biggest/newest
+    local DESC_FIRST = { level = true, kills = true, when = true }
     for _, h in ipairs(headers) do
-        local fs = page:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        fs:SetPoint("TOPLEFT", h[2], -78)
+        local btn = CreateFrame("Button", nil, page)
+        local fs = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        fs:SetPoint("LEFT")
         fs:SetText(h[1])
+        btn:SetSize(math.max(20, fs:GetStringWidth() + 4), 14)
+        btn:SetPoint("TOPLEFT", h[2], -98)
+        btn:SetScript("OnClick", function(self)
+            if page.sortKey == h[3] then
+                page.sortDesc = not page.sortDesc
+            else
+                page.sortKey, page.sortDesc = h[3], DESC_FIRST[h[3]] or false
+            end
+            arrow:ClearAllPoints()
+            arrow:SetPoint("LEFT", fs, "RIGHT", 2, 0)
+            if page.sortDesc then arrow:SetTexCoord(0, 0.5625, 0, 1) else arrow:SetTexCoord(0, 0.5625, 1, 0) end
+            arrow:Show()
+            refreshListPage(page)
+        end)
+        btn:SetScript("OnEnter", function() fs:SetTextColor(1, 1, 1) end)
+        btn:SetScript("OnLeave", function() fs:SetTextColor(1, 0.82, 0) end)
     end
 
     local scroll = CreateFrame("ScrollFrame", nil, page, "UIPanelScrollFrameTemplate")
-    scroll:SetPoint("TOPLEFT", 12, -94)
+    scroll:SetPoint("TOPLEFT", 12, -114)
     scroll:SetPoint("BOTTOMRIGHT", -32, 44)
     page.content = CreateFrame("Frame", nil, scroll)
     page.content:SetSize(540, 1)
@@ -743,7 +864,7 @@ local HELP = {
     "|cffffff00/hl swine Firstname Lastname [reason]|r – add to the Swine List (your faction)",
     "|cffffff00/hl target [reason]|r – add your target (KOS or Swine List, by faction)",
     "|cffffff00/hl move Firstname Lastname|r – move between the two lists",
-    "|cffffff00/hl log|r – recent kills and sightings",
+    "|cffffff00/hl log|r – recent kills, deaths and sightings",
     "|cffffff00/hl macro|r – create a macro that targets the nearby KOS player",
     "|cffffff00/hl notes|r – patch notes: what's new in each version",
     "|cffffff00/hl note Firstname Lastname new note|r – change the note (or click the row in /hl)",
@@ -753,6 +874,7 @@ local HELP = {
     "|cffffff00/hl sync|r – sync with friends now",
     "|cffffff00/hl channel <name> [password]|r – private sync channel for friends outside your guild (|cffffff00/hl channel off|r)",
     "|cffffff00/hl guild, group, alerts, sound, share, remote [on/off]|r – toggles",
+    "|cffffff00/hl trust [on/off]|r – only accept sync from members of your guild (on by default)",
     "|cffffff00/hl offset <pixels>|r / |cffffff00/hl scale <0.5-2>|r – move/resize the nameplate skull",
     "|cffffff00/hl minimap [on/off]|r – show/hide the minimap button",
     "|cffffff00/hl wellfed [on/off]|r – Well Fed reminder (move it in the Quality of Life tab)",
@@ -850,6 +972,7 @@ SlashCmdList.HUENSLISTE = function(msg)
             HL:ScheduleHello(5)
             HL:Print("Syncing via channel |cffffff00" .. name .. "|r. Your friends need the same name and password.")
         end
+    elseif cmd == "trust" then toggle("guildOnly", arg, "Only sync with guild members")
     elseif cmd == "guild" then toggle("syncGuild", arg, "Guild sync")
     elseif cmd == "group" then toggle("syncGroup", arg, "Group sync")
     elseif cmd == "alerts" then toggle("alerts", arg, "Alerts")
