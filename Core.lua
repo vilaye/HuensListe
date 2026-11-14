@@ -15,6 +15,7 @@ local DEFAULTS = {
     avoid = {},     -- same format as entries: the Swine List (own faction)
     kills = {},     -- KOS kill credits: { n = victim, b = killer, t = time, r = zone }
     deaths = {},    -- deaths to KOS players: { n = KOS killer, b = victim (one of us), t = time, r = zone }
+    prio = {},      -- [key] = { n = KOS player, r = "1", b = who marked, t, d }: high-priority KOS (synced)
     bounty = {},    -- [key] = { n = KOS player, r = bounty text, b = who set it, t, d } (synced like the lists)
     info = {},      -- [key] = { c = class file ("SHAMAN"), l = level, t = time } for listed players
     selfIds = {},   -- [character GUID] = our full name as the game sends it ("First-Last")
@@ -30,6 +31,8 @@ local DEFAULTS = {
         channel = "",           -- optional private sync channel
         channelPassword = "",
         alertCooldown = 60,     -- seconds between alerts for the same player
+        normalQuiet = false,    -- normal KOS players: chat line only (banner + sound just for high priority)
+        zoneWarning = true,     -- one line when you enter a zone with recent KOS activity
         plateOffsetY = 0,
         plateScale = 1,
     },
@@ -214,7 +217,9 @@ HL.LISTS.kills = {
 HL.LISTS.deaths = { db = "deaths", label = "Deaths", color = "c070ff", key = HL.LISTS.kills.key }
 -- Bounties on KOS players: one per player, r = the bounty text ("50g from Vila").
 HL.LISTS.bounty = { db = "bounty", label = "Bounties", color = "ffd100" }
-HL.SYNC_ORDER = { "kos", "avoid", "kills", "deaths", "bounty" }
+-- High-priority marks on KOS players.
+HL.LISTS.prio = { db = "prio", label = "High priority", color = "ffd100" }
+HL.SYNC_ORDER = { "kos", "avoid", "kills", "deaths", "bounty", "prio" }
 
 function HL:Entries(list) return self.db[HL.LISTS[list or "kos"].db] end
 
@@ -427,6 +432,30 @@ function HL:SetBounty(name, text)
     if cur and cur.r == text then return end
     self:SetEntry(e.n, text, nil, "bounty")
     self:Print(("|cffffd100Bounty|r on %s: %s"):format(HL.ColorName(HL.ShortName(e.n), "kos"), text))
+end
+
+function HL:IsPriority(name)
+    local full = HL.NormalizeName(name or "")
+    if not full or not self:Get(full, "kos") then return false end
+    return self:Get(full, "prio") ~= nil
+end
+
+function HL:SetPriority(name, on)
+    local e = self:Get(HL.NormalizeName(name or "") or "", "kos")
+    if not e then self:Print("High priority is for players on the " .. HL.ListLabel("kos") .. ": " .. tostring(name)) return end
+    local cur = self:IsPriority(e.n)
+    if on == nil then on = not cur end
+    if (on and true or false) == cur then return end
+    self:SetEntry(e.n, on and "1" or "", (not on) or nil, "prio")
+    self:Print(HL.ColorName(HL.ShortName(e.n), "kos") .. (on and " is now |cffffd100high priority|r" or " is back to normal priority"))
+end
+
+-- Revenge: a KOS player who killed you is your revenge target for 10 minutes
+HL.revenge = {} -- [key] = GetTime() when it runs out (this session only)
+function HL:IsRevenge(name)
+    local full = HL.NormalizeName(name or "")
+    local untilT = full and self.revenge[HL.Key(full)]
+    return untilT ~= nil and GetTime() < untilT
 end
 
 -- Monday 00:00 (UTC) of the current week, for the weekly kill board

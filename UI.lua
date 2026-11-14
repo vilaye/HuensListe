@@ -208,7 +208,9 @@ local function getRow(page, i)
     r:EnableMouse(true)
     r:SetScript("OnMouseUp", function(self, button)
         if not self.full then return end
-        if button == "LeftButton" then
+        if IsShiftKeyDown() and list == "kos" then
+            HL:SetPriority(self.full)
+        elseif button == "LeftButton" then
             HL:PromptNote(self.full)
         elseif button == "RightButton" and list == "kos" then
             HL:PromptBounty(self.full)
@@ -221,6 +223,7 @@ local function getRow(page, i)
         GameTooltip:AddLine(HL:ColoredName(e.n, list))
         local info = HL:InfoText(e.n)
         if info then GameTooltip:AddLine("Level " .. info) end
+        if list == "kos" and HL:IsPriority(e.n) then GameTooltip:AddLine("High priority", 1, 0.82, 0) end
         if e.r ~= "" then GameTooltip:AddLine(e.r, 1, 1, 1, true) end
         local bounty = list == "kos" and HL:Bounty(e.n)
         if bounty then GameTooltip:AddLine("Bounty: " .. bounty.r .. " (set by " .. HL.ShortName(bounty.b) .. ")", 1, 0.82, 0, true) end
@@ -249,13 +252,18 @@ local function getRow(page, i)
         end
         GameTooltip:AddLine(" ")
         GameTooltip:AddLine("Click to edit the note", 0.4, 0.8, 1)
-        if list == "kos" then GameTooltip:AddLine("Right-click to set a bounty", 0.4, 0.8, 1) end
+        if list == "kos" then
+            GameTooltip:AddLine("Right-click to set a bounty", 0.4, 0.8, 1)
+            GameTooltip:AddLine("Shift-click to toggle high priority", 0.4, 0.8, 1)
+        end
         GameTooltip:Show()
     end)
     r:SetScript("OnLeave", function() GameTooltip:Hide() end)
     page.rows[i] = r
     return r
 end
+
+local STAR = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_1:12:12:0:0|t " -- high priority
 
 -- Sort keys for the list columns. "added" (newest first) is the default.
 local SORTS = {
@@ -279,13 +287,15 @@ local function refreshListPage(page)
             if filter and filter ~= "" then
                 local bounty = list == "kos" and HL:Bounty(e.n)
                 local hay = (HL.ShortName(e.n) .. " " .. e.r .. " " .. HL.ShortName(e.b) .. " "
-                    .. (HL:InfoText(e.n, true) or "") .. (bounty and (" bounty " .. bounty.r) or "")):lower()
+                    .. (HL:InfoText(e.n, true) or "") .. (bounty and (" bounty " .. bounty.r) or "")
+                    .. ((list == "kos" and HL:IsPriority(e.n)) and " high priority" or "")):lower()
                 match = hay:find(filter, 1, true) ~= nil
             end
             if match then
                 local info = HL:Info(e.n)
                 local s = (list == "kos") and HL.db.seen[HL.Key(e.n)] or nil
-                local x = { e = e, seen = s, level = info and info.l or 0, kills = 0, deaths = 0 }
+                local x = { e = e, seen = s, level = info and info.l or 0, kills = 0, deaths = 0,
+                    prio = list == "kos" and HL:IsPriority(e.n) or false }
                 if list == "kos" then
                     x.kills = HL:KillStats(e.n)
                     x.deaths = HL:DeathStats(e.n)
@@ -299,7 +309,9 @@ local function refreshListPage(page)
     end
     local get = SORTS[page.sortKey] or SORTS.added
     local desc = page.sortDesc
+    local prioFirst = (page.sortKey or "added") == "added" -- default order: high priority on top
     table.sort(items, function(a, b)
+        if prioFirst and a.prio ~= b.prio then return a.prio end
         local va, vb = get(a), get(b)
         if va ~= vb then
             if desc then return va > vb end
@@ -312,7 +324,7 @@ local function refreshListPage(page)
         local e, s = x.e, x.seen
         local r = getRow(page, i)
         r.full, r.entry, r.seenData = e.n, e, s
-        r.name:SetText(HL:ColoredName(e.n, list)
+        r.name:SetText((x.prio and STAR or "") .. HL:ColoredName(e.n, list)
             .. ((list == "kos" and HL:Bounty(e.n)) and " |TInterface\\MoneyFrame\\UI-GoldIcon:12:12:0:0|t" or ""))
         r.level:SetText(x.level > 0 and tostring(x.level) or "")
         r.reason:SetText(e.r)
@@ -578,6 +590,156 @@ function HL:BuildQoLPage(parent)
     return page
 end
 
+---------------------------------------------------------------------------
+-- Options tab: everything that used to be slash-command only
+---------------------------------------------------------------------------
+-- A plain slider built without templates (their names differ between clients)
+local function makeSlider(parent, label, key, minV, maxV, step, anchor, fmt, onChange)
+    local s = CreateFrame("Slider", nil, parent)
+    s:SetOrientation("HORIZONTAL")
+    s:SetSize(210, 16)
+    s:SetPoint(unpack(anchor))
+    s:SetMinMaxValues(minV, maxV)
+    s:SetValueStep(step)
+    if s.SetObeyStepOnDrag then s:SetObeyStepOnDrag(true) end
+    s:EnableMouse(true)
+    local bar = s:CreateTexture(nil, "BACKGROUND")
+    bar:SetPoint("LEFT")
+    bar:SetPoint("RIGHT")
+    bar:SetHeight(6)
+    bar:SetColorTexture(0.25, 0.25, 0.25, 0.9)
+    s:SetThumbTexture("Interface\\Buttons\\UI-SliderBar-Button-Horizontal")
+    local thumb = s:GetThumbTexture()
+    if thumb then thumb:SetSize(24, 24) end
+    local text = s:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    text:SetPoint("BOTTOMLEFT", s, "TOPLEFT", 0, 3)
+    local function show(v) text:SetText(label .. ": |cffffd100" .. fmt:format(v) .. "|r") end
+    s:SetScript("OnShow", function(self)
+        local v = tonumber(HL.settings[key]) or minV
+        self.loading = true
+        self:SetValue(v)
+        self.loading = false
+        show(v)
+    end)
+    s:SetScript("OnValueChanged", function(self, v)
+        if self.loading then return end
+        v = math.max(minV, math.min(maxV, math.floor(v / step + 0.5) * step))
+        HL.settings[key] = v
+        show(v)
+        if onChange then onChange(v) end
+    end)
+    return s
+end
+
+function HL:SetSyncChannel(name, password)
+    name = strtrim(name or "")
+    self:LeaveSyncChannel(self.settings.channel)
+    if name == "" or name:lower() == "off" then
+        self.settings.channel, self.settings.channelPassword = "", ""
+        self:Print("Sync channel disabled.")
+        return
+    end
+    self.settings.channel, self.settings.channelPassword = name, strtrim(password or "")
+    self:JoinSyncChannel()
+    self:ScheduleHello(5)
+    self:Print("Syncing via channel |cffffff00" .. name .. "|r. Your friends need the same name and password.")
+end
+
+function HL:BuildOptionsPage(parent)
+    local page = CreateFrame("Frame", nil, parent)
+    page:SetAllPoints()
+
+    local function title(text, x, y, font)
+        local fs = page:CreateFontString(nil, "OVERLAY", font or "GameFontHighlight")
+        fs:SetPoint("TOPLEFT", x, y)
+        fs:SetText(text)
+        return fs
+    end
+    title("Options", 20, -36, "GameFontNormalLarge")
+
+    -- left column: alerts
+    title("Alerts", 20, -64)
+    local y = -80
+    local function check(label, key, onChange)
+        local cb = makeCheck(page, label, key, { "TOPLEFT", 16, y }, onChange)
+        y = y - 22
+        return cb
+    end
+    check("Alert me when I see a KOS player", "alerts")
+    check("Play sounds", "sound")
+    check("Normal KOS players: chat line only", "normalQuiet")
+    check("Show sightings from my friends", "sightingAlerts")
+    check("Share my sightings with friends", "shareSightings")
+    check("Warn me when I enter a zone with KOS activity", "zoneWarning")
+    check("Swine List alerts (group join, whisper)", "avoidAlerts")
+    local mm = check("Minimap button", "minimapHide")
+    mm:SetScript("OnShow", function(self) self:SetChecked(not HL.settings.minimapHide) end)
+    mm:SetScript("OnClick", function(self)
+        HL.settings.minimapHide = not self:GetChecked()
+        HL:UpdateMinimapButton()
+    end)
+
+    -- right column: sliders
+    title("Alert timing and the nameplate skull", 320, -64)
+    makeSlider(page, "Alert cooldown per player (seconds)", "alertCooldown", 10, 300, 10,
+        { "TOPLEFT", 324, -104 }, "%d")
+    makeSlider(page, "Skull size", "plateScale", 0.5, 2, 0.1, { "TOPLEFT", 324, -150 }, "%.1f",
+        function() HL:RefreshPlates() end)
+    makeSlider(page, "Skull height above the nameplate", "plateOffsetY", -40, 80, 2, { "TOPLEFT", 324, -196 }, "%d",
+        function() HL:RefreshPlates() end)
+
+    -- sync
+    title("Sync", 20, -268)
+    y = -284
+    check("Sync over guild chat", "syncGuild")
+    check("Sync with my party / raid", "syncGroup")
+    check("Only accept sync from members of my guild", "guildOnly")
+
+    title("Private sync channel (non-guild friends)", 320, -268)
+    local nameLabel = title("Name", 324, -288, "GameFontNormalSmall")
+    local pwLabel = title("Password", 452, -288, "GameFontNormalSmall")
+    local nameBox = CreateFrame("EditBox", nil, page, "InputBoxTemplate")
+    nameBox:SetSize(116, 20)
+    nameBox:SetPoint("TOPLEFT", 328, -302)
+    nameBox:SetAutoFocus(false)
+    nameBox:SetMaxLetters(30)
+    local pwBox = CreateFrame("EditBox", nil, page, "InputBoxTemplate")
+    pwBox:SetSize(100, 20)
+    pwBox:SetPoint("TOPLEFT", 456, -302)
+    pwBox:SetAutoFocus(false)
+    pwBox:SetMaxLetters(30)
+    nameBox:SetScript("OnEscapePressed", nameBox.ClearFocus)
+    pwBox:SetScript("OnEscapePressed", pwBox.ClearFocus)
+    nameBox:SetScript("OnEnterPressed", function() pwBox:SetFocus() end)
+
+    local function apply()
+        local name = (strtrim(nameBox:GetText() or ""):gsub("%s", ""))
+        local pw = (strtrim(pwBox:GetText() or ""):gsub("%s", ""))
+        HL:SetSyncChannel(name, pw)
+        nameBox:ClearFocus(); pwBox:ClearFocus()
+    end
+    pwBox:SetScript("OnEnterPressed", apply)
+    local applyBtn = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+    applyBtn:SetSize(80, 22)
+    applyBtn:SetPoint("TOPLEFT", 324, -328)
+    applyBtn:SetText("Apply")
+    applyBtn:SetScript("OnClick", apply)
+    local offBtn = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+    offBtn:SetSize(80, 22)
+    offBtn:SetPoint("LEFT", applyBtn, "RIGHT", 6, 0)
+    offBtn:SetText("Turn off")
+    offBtn:SetScript("OnClick", function()
+        nameBox:SetText(""); pwBox:SetText("")
+        HL:SetSyncChannel("", "")
+    end)
+
+    page:SetScript("OnShow", function()
+        nameBox:SetText(HL.settings.channel or "")
+        pwBox:SetText(HL.settings.channelPassword or "")
+    end)
+    return page
+end
+
 local function buildListPage(parent, list)
     local page = CreateFrame("Frame", nil, parent)
     page:SetAllPoints()
@@ -746,11 +908,12 @@ local function createMain()
     local log = HL:BuildLogPage(main)
     local qol = HL:BuildQoLPage(main)
     local users = HL:BuildUsersPage(main)
+    local options = HL:BuildOptionsPage(main)
     local notes = HL:BuildPatchNotesPage(main)
 
     -- Tabs below the window
-    local pages = { kosPage, avoidPage, log, qol, users, notes }
-    local labels = { "KOS List", "Swine List", "Log", "Quality of Life", "Users", "Patch Notes" }
+    local pages = { kosPage, avoidPage, log, qol, users, options, notes }
+    local labels = { "KOS List", "Swine List", "Log", "QoL", "Users", "Options", "Patch Notes" }
     main.tabs = {}
     local function selectTab(id)
         for i, page in ipairs(pages) do page:SetShown(i == id) end
@@ -785,7 +948,7 @@ function HL:ToggleMain()
     main:SetShown(not main:IsShown())
 end
 
-HL.TAB_LOG, HL.TAB_PATCH_NOTES = 3, 6
+HL.TAB_LOG, HL.TAB_OPTIONS, HL.TAB_PATCH_NOTES = 3, 6, 7
 function HL:ShowTab(id)
     if not main then createMain() end
     main:Show()
@@ -922,6 +1085,8 @@ if Menu and Menu.ModifyMenu then
             root:CreateButton("Edit note", function() HL:PromptNote(full) end)
             if onList == "kos" then
                 root:CreateButton(HL:Bounty(full) and "Edit bounty" or "Set bounty", function() HL:PromptBounty(full) end)
+                root:CreateButton(HL:IsPriority(full) and "Back to normal priority" or "Mark as high priority",
+                    function() HL:SetPriority(full) end)
             end
             root:CreateButton("Remove from the " .. HL.ListLabel(onList), function() HL:Remove(full, onList) end)
             local other = HL.OtherList(onList)
@@ -963,6 +1128,8 @@ local HELP = {
     "|cffffff00/hl macro|r – create a macro that targets the nearby KOS player",
     "|cffffff00/hl notes|r – patch notes: what's new in each version",
     "|cffffff00/hl note Firstname Lastname new note|r – change the note (or click the row in /hl)",
+    "|cffffff00/hl options|r – all settings in one tab",
+    "|cffffff00/hl prio Firstname Lastname|r – toggle high priority for a KOS player (or Shift-click their row)",
     "|cffffff00/hl bounty Firstname Lastname text|r – set a bounty on a KOS player (no text = remove)",
     "|cffffff00/hl del Firstname Lastname|r – remove from either list (no name = target)",
     "|cffffff00/hl debug|r – print sync traffic in chat (for troubleshooting)",
@@ -1061,17 +1228,15 @@ SlashCmdList.HUENSLISTE = function(msg)
         local name, pw = rest:match("^(%S*)%s*(%S*)$")
         if not name or name == "" then
             HL:Print("Sync channel: " .. (HL.settings.channel ~= "" and HL.settings.channel or "none"))
-        elseif name:lower() == "off" then
-            HL:LeaveSyncChannel(HL.settings.channel)
-            HL.settings.channel, HL.settings.channelPassword = "", ""
-            HL:Print("Sync channel disabled.")
         else
-            HL:LeaveSyncChannel(HL.settings.channel)
-            HL.settings.channel, HL.settings.channelPassword = name, pw or ""
-            HL:JoinSyncChannel()
-            HL:ScheduleHello(5)
-            HL:Print("Syncing via channel |cffffff00" .. name .. "|r. Your friends need the same name and password.")
+            HL:SetSyncChannel(name, pw)
         end
+    elseif cmd == "prio" or cmd == "priority" then
+        local who = rest ~= "" and rest or HL.UnitFullName("target")
+        if not who then HL:Print("Usage: /hl prio Firstname Lastname") return end
+        HL:SetPriority(who)
+    elseif cmd == "options" or cmd == "config" or cmd == "settings" then
+        HL:ShowTab(HL.TAB_OPTIONS)
     elseif cmd == "trust" then toggle("guildOnly", arg, "Only sync with guild members")
     elseif cmd == "guild" then toggle("syncGuild", arg, "Guild sync")
     elseif cmd == "group" then toggle("syncGroup", arg, "Group sync")

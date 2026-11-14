@@ -7,8 +7,8 @@
 --   R;0,3,7           "send me your entries in these buckets", whispered
 --   S;name;zone;sub   sighting, broadcast
 --   P;version / V;version   version ping / reply (Users tab)
--- The Swine List uses a/u/h/r, kill credits X/Y/Z/W, deaths K/L/M/N and bounties B/C/D/E
--- instead of A/U/H/R.
+-- The Swine List uses a/u/h/r, kill credits X/Y/Z/W, deaths K/L/M/N, bounties B/C/D/E
+-- and high-priority marks F/G/I/J instead of A/U/H/R.
 -- Sightings may carry class and level: S;name;zone;sub;CLASS;level
 local _, HL = ...
 local RS = HL.RS
@@ -110,6 +110,7 @@ local KINDS = {
     kills = { A = "X", U = "Y", H = "Z", R = "W" },
     deaths = { A = "K", U = "L", H = "M", R = "N" },
     bounty = { A = "B", U = "C", H = "D", R = "E" },
+    prio = { A = "F", U = "G", H = "I", R = "J" },
 }
 local KIND_INFO = {} -- "a" -> { list = "avoid", base = "A" }
 for list, m in pairs(KINDS) do
@@ -387,11 +388,19 @@ HL:On("CHAT_MSG_ADDON", function(prefix, msg, channel, rawSender)
         end
         if #changed == 0 then return end
         HL:Fire()
-        if list == "kills" or list == "deaths" or list == "bounty" then
+        if list == "kills" or list == "deaths" or list == "bounty" or list == "prio" then
             if base == "A" then
                 for _, rec in ipairs(changed) do
                     local where = rec.r ~= "" and (" in " .. rec.r) or ""
-                    if list == "bounty" then
+                    if list == "prio" then
+                        local who = HL.ShortName(rec.b ~= "" and rec.b or sender)
+                        local target = HL.ColorName(HL.ShortName(rec.n), "kos")
+                        if rec.d then
+                            HL:Print(who .. " set " .. target .. " back to normal priority")
+                        else
+                            HL:Print(who .. " marked " .. target .. " as |cffffd100high priority|r")
+                        end
+                    elseif list == "bounty" then
                         local who = HL.ShortName(rec.b ~= "" and rec.b or sender)
                         local target = HL.ColorName(HL.ShortName(rec.n), "kos")
                         if rec.d or rec.r == "" then

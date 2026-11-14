@@ -11,6 +11,11 @@
 - Log tab: "Show zones" switches to a per-zone summary (sightings, kills, deaths and who was there) for the last 24 hours or 7 days.
 - Users tab: new "Week" column with KOS kills since Monday, the week's leader in gold. Chat announces KOS kill streaks (3, 5, 10, 15, ... kills without dying to a KOS player).
 - After a gank (Quality of Life tab, off by default): when you die in combat to an enemy player who isn't listed, a popup offers to add them to the KOS List with a prefilled note. Never in battlegrounds or arenas; a declined player isn't offered again that session.
+- Options tab (`/hl options`): alerts, sounds, alert cooldown, skull size and height, sync toggles and the private sync channel, all with checkboxes and sliders instead of slash commands. The "Quality of Life" tab is now labelled "QoL" to make room.
+- High priority: Shift-click a KOS row, use the right-click menu or `/hl prio Firstname Lastname`. High-priority players get a gold "HIGH PRIORITY" skull (25% bigger), their own banner and sound, a star in the list and sort to the top. Syncs to friends. New option "Normal KOS players: chat line only" keeps the banner and sound for high-priority players.
+- Revenge: when a KOS player kills you, they are your revenge target for 10 minutes: orange "REVENGE" skull, always alerted, last line of the target macro (so they win), and "Revenge!" when you kill them.
+- Zone warning: entering a zone prints one line if KOS players were active there in the last 30 minutes (from kills, deaths and sightings). At most once per zone every 5 minutes; toggle in the Options tab.
+- Target macro order is now: everyone else, high priority, recently seen, recently seen + high priority, revenge target.
 - Fixed: the "Target nearby KOS" key binding did nothing unless the on-screen button was on or `/hl macro` had been used. The macro is now created as soon as a key is bound.
 - Fixed: once your full name was known, sync messages from a friend with the same first name and an identical list could be dropped as "your own echo".
 - Fixed: a possible error when the game hides a unit name in a group roster update.

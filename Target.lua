@@ -29,33 +29,38 @@ local function targetLines(name)
     return "/target " .. HL.ShortName(name)
 end
 
--- KOS names for the macro, least important first (the last match wins)
+-- KOS names for the macro, least important first (the last match wins):
+-- everyone else < high priority < seen in the last 2 minutes < seen + high priority
+-- < your revenge target. Only the last MAX_NAMES fit.
 function HL:TargetCandidates()
     local now = GetTime()
-    local recent, seenKey = {}, {}
-    for key, s in pairs(nearby) do
-        if now - s.t <= NEARBY_FOR and self:Get(s.n, "kos") then
-            recent[#recent + 1] = s
+    local all = {}
+    for key, e in pairs(self:Entries("kos")) do
+        if not e.d then
+            local s = nearby[key]
+            local recent = s ~= nil and now - s.t <= NEARBY_FOR
+            local prio = self:IsPriority(e.n)
+            local tier = 1
+            if self:IsRevenge(e.n) then tier = 5
+            elseif recent and prio then tier = 4
+            elseif recent then tier = 3
+            elseif prio then tier = 2 end
+            all[#all + 1] = { n = e.n, tier = tier, at = recent and s.t or 0, added = e.t, recent = recent }
         end
     end
-    table.sort(recent, function(a, b) return a.t < b.t end) -- most recent last
-    while #recent > MAX_NAMES do table.remove(recent, 1) end
-    for _, s in ipairs(recent) do seenKey[HL.Key(s.n)] = true end
-
-    -- fill up with the rest of the KOS list (newest entries closest to the end)
-    local others = {}
-    for _, e in pairs(self:Entries("kos")) do
-        if not e.d and not seenKey[HL.Key(e.n)] then others[#others + 1] = e end
+    table.sort(all, function(a, b)
+        if a.tier ~= b.tier then return a.tier < b.tier end
+        if a.at ~= b.at then return a.at < b.at end
+        if a.added ~= b.added then return a.added < b.added end
+        return a.n < b.n
+    end)
+    local names, latest, latestAt = {}, nil, -1
+    for i = math.max(1, #all - MAX_NAMES + 1), #all do
+        local c = all[i]
+        names[#names + 1] = c.n
+        if c.recent and c.at > latestAt then latest, latestAt = c.n, c.at end
     end
-    table.sort(others, function(a, b) return a.t < b.t end)
-    local room = MAX_NAMES - #recent
-    local filler = {}
-    for i = math.max(1, #others - room + 1), #others do filler[#filler + 1] = others[i].n end
-
-    local names = {}
-    for _, n in ipairs(filler) do names[#names + 1] = n end
-    for _, s in ipairs(recent) do names[#names + 1] = s.n end
-    return names, recent[#recent] and recent[#recent].n or nil
+    return names, latest
 end
 
 -- Macros are limited to 255 characters; anything past that never runs. The most

@@ -191,6 +191,11 @@ function HL:AddKillCredit(victimName)
     if self.BroadcastEntries then self:BroadcastEntries({ rec }, "kills") end
     local count = self:KillStats(e.n)
     self:Print(("You killed %s – KOS kill #%d"):format(HL.ColorName(HL.ShortName(e.n), "kos"), count))
+    if self:IsRevenge(e.n) then
+        self.revenge[HL.Key(e.n)] = nil
+        self:Print("|cffff8000Revenge!|r You got " .. HL.ColorName(HL.ShortName(e.n), "kos") .. " back.")
+        self:Fire()
+    end
     local bounty = self:Bounty(e.n)
     if bounty then
         self.bountyClaimed[HL.Key(e.n)] = GetTime()
@@ -206,11 +211,13 @@ function HL:AddDeathCredit(killerName)
     if self:Throttled("deathcredit:" .. HL.Key(e.n), 10) then return end
     local rec = { n = e.n, b = self.me or "", t = GetServerTime(), r = HL.Clean(GetZoneText() or "", 60) }
     if not self:Merge(rec, "deaths") then return end
+    self.revenge[HL.Key(e.n)] = GetTime() + 600
     self:Fire()
     if self.BroadcastEntries then self:BroadcastEntries({ rec }, "deaths") end
     local count = self:DeathStats(e.n)
     self:Print(("|cffc070ffYou were killed by|r %s – they have killed you or your friends %d time%s"):format(
         HL.ColorName(HL.ShortName(e.n), "kos"), count, count == 1 and "" or "s"))
+    self:Print(("|cffff8000Revenge target for 10 minutes:|r %s"):format(HL.ColorName(HL.ShortName(e.n), "kos")))
 end
 
 local function debugLog(text)

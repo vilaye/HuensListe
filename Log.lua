@@ -96,6 +96,35 @@ function HL:HotZones(period)
     return order
 end
 
+-- KOS players active in a zone within the last `window` seconds, most recent first
+function HL:ZoneActivity(zone, window)
+    local names, has = {}, {}
+    if not zone or zone == "" then return names end
+    local since = GetServerTime() - window
+    for _, it in ipairs(self:LogItems(true, true, true)) do
+        if it.t < since then break end
+        if it.z == zone and not has[it.n] and self:Get(it.n, "kos") then
+            has[it.n] = true
+            names[#names + 1] = HL.ShortName(it.n)
+        end
+    end
+    return names
+end
+
+-- Entering a zone: one line if KOS players were active there in the last 30 minutes
+local function zoneWarning()
+    if not HL.db or not HL.settings.alerts or not HL.settings.zoneWarning then return end
+    if HL.InQuietZone and HL:InQuietZone() then return end
+    local zone = GetZoneText() or ""
+    local names = HL:ZoneActivity(zone, 1800)
+    if #names == 0 or HL:Throttled("zonewarn:" .. zone, 300) then return end
+    local shown = {}
+    for i = 1, math.min(#names, 4) do shown[i] = names[i] end
+    HL:Print(("|cffffd100%s:|r %d KOS player%s active here in the last 30 minutes – |cffff4040%s%s|r"):format(zone, #names,
+        #names == 1 and "" or "s", table.concat(shown, ", "), #names > 4 and ", ..." or ""))
+end
+HL:On("ZONE_CHANGED_NEW_AREA", function() C_Timer.After(1, zoneWarning) end)
+
 local function playersByCount(z)
     local list = {}
     for name, n in pairs(z.players) do list[#list + 1] = { name = name, n = n } end

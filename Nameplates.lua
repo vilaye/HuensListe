@@ -93,13 +93,21 @@ function HL:OnSighting(full, e, unit)
     if self.settings.alerts then
         local name = HL.ShortName(e.n)
         local info = unit and safeUnitInfo(unit) or ""
-        if RaidNotice_AddMessage and RaidWarningFrame then
-            RaidNotice_AddMessage(RaidWarningFrame, "|cffff2020KILL ON SIGHT: " .. name .. "|r", ChatTypeInfo["RAID_WARNING"])
+        -- high priority and revenge targets always get the banner and sound;
+        -- normal ones too, unless "chat line only" is set in the Options tab
+        local prio, revenge = self:IsPriority(e.n), self:IsRevenge(e.n)
+        local loud = prio or revenge or not self.settings.normalQuiet
+        if loud and RaidNotice_AddMessage and RaidWarningFrame then
+            local label = revenge and "|cffff8000REVENGE: " or (prio and "|cffffd100HIGH PRIORITY KOS: " or "|cffff2020KILL ON SIGHT: ")
+            RaidNotice_AddMessage(RaidWarningFrame, label .. name .. "|r", ChatTypeInfo["RAID_WARNING"])
         end
         local bounty = self:Bounty(e.n)
-        self:Print("|cffff4040" .. name .. "|r" .. info .. " is nearby!" .. (e.r ~= "" and (" – " .. e.r) or "")
+        self:Print((revenge and "|cffff8000[Revenge]|r " or "") .. (prio and "|cffffd100[High priority]|r " or "")
+            .. "|cffff4040" .. name .. "|r" .. info .. " is nearby!" .. (e.r ~= "" and (" – " .. e.r) or "")
             .. (bounty and (" – |cffffd100Bounty: " .. bounty.r .. "|r") or ""))
-        if self.settings.sound then HL.PlaySoundSafe(SOUNDKIT and SOUNDKIT.RAID_WARNING) end
+        if self.settings.sound and loud and SOUNDKIT then
+            HL.PlaySoundSafe((prio or revenge) and (SOUNDKIT.ALARM_CLOCK_WARNING_3 or SOUNDKIT.RAID_WARNING) or SOUNDKIT.RAID_WARNING)
+        end
     end
 
     if self.settings.shareSightings and self.Broadcast then
@@ -136,6 +144,21 @@ function HL:UpdatePlate(unit)
     o:SetScale(self.settings.plateScale or 1)
     local bounty = self:Bounty(e.n)
     o.bounty:SetText(bounty and ("Bounty: " .. bounty.r) or "")
+    local prio = self:IsPriority(e.n)
+    if self:IsRevenge(e.n) then
+        o.text:SetText("REVENGE")
+        o.text:SetTextColor(1, 0.5, 0)
+        o.icon:SetVertexColor(1, 0.6, 0.2)
+    elseif prio then
+        o.text:SetText("HIGH PRIORITY")
+        o.text:SetTextColor(1, 0.82, 0)
+        o.icon:SetVertexColor(1, 0.85, 0.3)
+    else
+        o.text:SetText("KILL ON SIGHT")
+        o.text:SetTextColor(1, 0.15, 0.15)
+        o.icon:SetVertexColor(1, 1, 1)
+    end
+    if prio then o:SetScale((self.settings.plateScale or 1) * 1.25) end
     o:Show()
     o.anim:Play()
     self:OnSighting(full, e, unit)
