@@ -3,7 +3,8 @@
 --   Campfire reminder: the same for the campfire buff / Boosted Rest debuff
 --   Weapon imbue reminder: Windfury Weapon, poisons etc. (temporary weapon enchants),
 --     with click-to-apply for the imbue / poison chosen per hand
---   Own buff reminder: the same for buffs the player picked (e.g. Find Minerals)
+--   Own buff reminder: the same for buffs the player picked (e.g. Find Minerals),
+--     with click-to-cast when the buff is a spell you know
 local _, HL = ...
 
 ---------------------------------------------------------------------------
@@ -527,10 +528,91 @@ local campfire = newReminder({
     has = function() return HL:HasCampBuff() end,
 })
 
+-- Click part of a reminder: a secure button laid over the text. The game doesn't let
+-- addons show, hide, move or change such a button in combat, so it lives in a holder
+-- that the game itself hides in combat, and everything else is done out of combat only.
+local function inCombat() return InCombatLockdown and InCombatLockdown() and true or false end
+
+local function newClicker(buttonName)
+    local c = {}
+    local holder = CreateFrame("Frame", nil, UIParent, "SecureHandlerStateTemplate")
+    holder:SetAllPoints(UIParent)
+    if RegisterStateDriver then RegisterStateDriver(holder, "visibility", "[combat] hide; show") end
+    local button = CreateFrame("Button", buttonName, holder, "SecureActionButtonTemplate")
+    button:SetFrameStrata("MEDIUM")
+    button:SetFrameLevel(20)
+    button:RegisterForClicks("AnyUp", "AnyDown")
+    local hl = button:CreateTexture(nil, "HIGHLIGHT")
+    hl:SetAllPoints()
+    hl:SetColorTexture(1, 1, 1, 0.10)
+    button:Hide()
+
+    local function setClick(n, click)
+        local sfx = tostring(n)
+        if not click then
+            button:SetAttribute("type" .. sfx, nil)
+            return
+        end
+        button:SetAttribute("type" .. sfx, click.kind)
+        if click.kind == "spell" then
+            button:SetAttribute("spell" .. sfx, click.name)
+            button:SetAttribute("target-slot" .. sfx, nil)
+        else
+            button:SetAttribute("item" .. sfx, click.name)
+            button:SetAttribute("target-slot" .. sfx, click.slot)
+        end
+    end
+
+    -- clicks: up to two of { kind = "spell" | "item", name, slot }: left and right click.
+    -- Does nothing in combat (the game hides the button there anyway).
+    function c.set(frame, clicks)
+        if inCombat() then return end
+        if not frame or #clicks == 0 then button:Hide() return end
+        local x, y = frame:GetCenter()
+        if not x or not y then button:Hide() return end
+        button:ClearAllPoints()
+        button:SetSize(frame:GetWidth(), frame:GetHeight())
+        button:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x, y)
+        setClick(1, clicks[1])
+        setClick(2, clicks[2])
+        button:Show()
+    end
+    return c
+end
+
+local MOVE_HINT = "Drag to move – click \"Lock\" in /hl when done"
+
 -- Own buffs: one frame that names what is missing
 local QUESTION_ICON = "Interface\\Icons\\INV_Misc_QuestionMark"
 local missingNow = {}
-local buffWatch = newReminder({
+local buffWatch, buffClicker
+
+-- Left / right click cast the first two missing buffs that are spells you know
+local function updateBuffClicker()
+    if not buffClicker or not buffWatch then return end
+    local frame = buffWatch.frame()
+    if not frame then return end
+    local clicks = {}
+    if buffWatch.shown() then
+        for _, b in ipairs(missingNow) do
+            local sp = spellInfo(b.n)
+            if sp and #clicks < 2 then clicks[#clicks + 1] = { kind = "spell", name = sp.name } end
+        end
+    end
+    local hint
+    if buffWatch.unlocked then
+        hint = MOVE_HINT
+    elseif #clicks > 0 then
+        hint = "Left-click: " .. clicks[1].name
+        if clicks[2] then hint = hint .. "  ·  Right-click: " .. clicks[2].name end
+        if inCombat() then hint = "Click to cast after combat" end
+    end
+    frame.hint:SetText(hint or "")
+    frame.hint:SetShown(hint ~= nil)
+    buffClicker.set(frame, clicks)
+end
+
+buffWatch = newReminder({
     frameName = "HuensListeBuffWatchFrame", posKey = "buffWatchPos", enabledKey = "buffWatchReminder",
     defaultY = 80, width = 480,
     text = function()
@@ -546,6 +628,8 @@ local buffWatch = newReminder({
         missingNow = missing
         return #missing == 0
     end,
+    onCreate = function() buffClicker = newClicker("HuensListeBuffButton") end,
+    after = updateBuffClicker,
 })
 
 -- Weapon imbues: names the hand(s) without one
@@ -553,28 +637,9 @@ local WEAPON_ICON = "Interface\\Icons\\INV_Sword_04"
 local missingHands = {}
 local weaponImbue
 
--- The click part is a secure button laid over the text. The game doesn't let addons
--- show, hide, move or change such a button in combat, so it lives in a holder that
--- the game itself hides in combat, and everything else is done out of combat only.
-local imbueHolder, imbueButton, imbuePending
+local imbueClicker
 local HAND_SLOT = { ["main hand"] = SLOT_MAINHAND, ["off hand"] = SLOT_OFFHAND }
 local HAND_KEY = { ["main hand"] = "main", ["off hand"] = "off" }
-
-local function inCombat() return InCombatLockdown and InCombatLockdown() and true or false end
-
-local function createImbueButton()
-    imbueHolder = CreateFrame("Frame", nil, UIParent, "SecureHandlerStateTemplate")
-    imbueHolder:SetAllPoints(UIParent)
-    if RegisterStateDriver then RegisterStateDriver(imbueHolder, "visibility", "[combat] hide; show") end
-    imbueButton = CreateFrame("Button", "HuensListeImbueButton", imbueHolder, "SecureActionButtonTemplate")
-    imbueButton:SetFrameStrata("MEDIUM")
-    imbueButton:SetFrameLevel(20)
-    imbueButton:RegisterForClicks("AnyUp", "AnyDown")
-    local hl = imbueButton:CreateTexture(nil, "HIGHLIGHT")
-    hl:SetAllPoints()
-    hl:SetColorTexture(1, 1, 1, 0.10)
-    imbueButton:Hide()
-end
 
 -- what a click would do for that hand: entry, or nil plus the reason
 local function imbueAction(hand)
@@ -586,25 +651,9 @@ local function imbueAction(hand)
     return entry
 end
 
-local function setClick(n, hand, entry)
-    local sfx = tostring(n)
-    if not entry then
-        imbueButton:SetAttribute("type" .. sfx, nil)
-        return
-    end
-    imbueButton:SetAttribute("type" .. sfx, entry.kind)
-    if entry.kind == "spell" then
-        imbueButton:SetAttribute("spell" .. sfx, entry.name)
-        imbueButton:SetAttribute("target-slot" .. sfx, nil)
-    else
-        imbueButton:SetAttribute("item" .. sfx, entry.name or ("item:" .. tostring(entry.id)))
-        imbueButton:SetAttribute("target-slot" .. sfx, HAND_SLOT[hand])
-    end
-end
-
 -- Left click: first missing hand with a chosen imbue. Right click: the second one.
 local function updateImbueButton()
-    if not imbueButton or not weaponImbue then return end
+    if not imbueClicker or not weaponImbue then return end
     local frame = weaponImbue.frame()
     if not frame then return end
 
@@ -620,7 +669,7 @@ local function updateImbueButton()
     -- hint under the text (plain text, fine in combat)
     local hint
     if weaponImbue.unlocked then
-        hint = "Drag to move – click \"Lock\" in /hl when done"
+        hint = MOVE_HINT
     elseif #clicks > 0 then
         hint = "Left-click: " .. clicks[1].entry.name .. " (" .. clicks[1].hand .. ")"
         if clicks[2] then hint = hint .. "  ·  Right-click: " .. clicks[2].entry.name .. " (" .. clicks[2].hand .. ")" end
@@ -631,18 +680,12 @@ local function updateImbueButton()
     frame.hint:SetText(hint or "")
     frame.hint:SetShown(hint ~= nil and (weaponImbue.unlocked or weaponImbue.shown()))
 
-    if inCombat() then imbuePending = true return end
-    imbuePending = false
-    if #clicks == 0 then imbueButton:Hide() return end
-
-    local x, y = frame:GetCenter()
-    if not x or not y then imbueButton:Hide() return end
-    imbueButton:ClearAllPoints()
-    imbueButton:SetSize(frame:GetWidth(), frame:GetHeight())
-    imbueButton:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x, y)
-    setClick(1, clicks[1].hand, clicks[1].entry)
-    setClick(2, clicks[2] and clicks[2].hand, clicks[2] and clicks[2].entry)
-    imbueButton:Show()
+    local list = {}
+    for i, c in ipairs(clicks) do
+        list[i] = { kind = c.entry.kind, slot = HAND_SLOT[c.hand],
+            name = c.entry.name or ("item:" .. tostring(c.entry.id)) }
+    end
+    imbueClicker.set(frame, list)
 end
 
 weaponImbue = newReminder({
@@ -664,7 +707,7 @@ weaponImbue = newReminder({
         missingHands = missing
         return #missing == 0
     end,
-    onCreate = createImbueButton,
+    onCreate = function() imbueClicker = newClicker("HuensListeImbueButton") end,
     after = updateImbueButton,
 })
 
@@ -737,4 +780,4 @@ end)
 HL:On("PLAYER_EQUIPMENT_CHANGED", function() weaponImbue.update() end)
 -- bought or used up the poison; combat started (the click part is hidden by the game)
 HL:On("BAG_UPDATE_DELAYED", function() weaponImbue.update() end)
-HL:On("PLAYER_REGEN_DISABLED", function() weaponImbue.update() end)
+HL:On("PLAYER_REGEN_DISABLED", function() weaponImbue.update(); buffWatch.update() end)
