@@ -699,6 +699,8 @@ local QOL_DEFAULTS = {
     quietPvP = false,
     quietCities = false,
     gankSuggest = false,
+    shareLocation = false,
+    showFriendsOnMap = false,
 }
 
 HL:On("PLAYER_LOGIN", function()

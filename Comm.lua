@@ -487,6 +487,9 @@ HL:On("CHAT_MSG_ADDON", function(prefix, msg, channel, rawSender)
 
     elseif kind == "S" then
         HL:OnRemoteSighting(parts[2], parts[3], parts[4], sender, parts[5], parts[6])
+
+    elseif kind == "O" then -- a friend's map position
+        if HL.OnPeerLocation then HL:OnPeerLocation(sender, parts[2], parts[3], parts[4], parts[5]) end
     end
 end)
 

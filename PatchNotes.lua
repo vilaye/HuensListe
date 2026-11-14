@@ -3,6 +3,10 @@
 local _, HL = ...
 
 HL.PATCH_NOTES = {
+    { version = "1.11.0", notes = {
+        "Friends on the world map: share your location and see friends who share theirs (Quality of Life, both off by default)",
+        "/hl where lists where your friends are",
+    } },
     { version = "1.10.0", notes = {
         "Weapon imbue reminder: choose a poison or imbue per hand, then click the reminder text to apply it (out of combat)",
     } },

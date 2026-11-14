@@ -773,6 +773,12 @@ function HL:BuildQoLPage(parent)
 
     makeCheck(page, "After a gank: offer to add my killer to the KOS List (not in battlegrounds)", "gankSuggest", { "TOPLEFT", 16, -362 })
 
+    -- Friends on the world map (two separate switches: you can watch without sharing)
+    makeCheck(page, "Share my location with friends", "shareLocation", { "TOPLEFT", 16, -386 },
+        function() HL:UpdateLocationSharing() end)
+    makeCheck(page, "Show friends on the world map", "showFriendsOnMap", { "TOPLEFT", 300, -386 },
+        function() HL:RefreshMapPins() end)
+
     page:SetScript("OnShow", function()
         for _, refresh in ipairs(refreshers) do refresh() end
     end)
@@ -1340,6 +1346,8 @@ local HELP = {
     "|cffffff00/hl minimap [on/off]|r – show/hide the minimap button",
     "|cffffff00/hl wellfed [on/off]|r – Well Fed reminder (move it in the Quality of Life tab)",
     "|cffffff00/hl campfire [on/off]|r – campfire buff reminder (move it in the Quality of Life tab)",
+    "|cffffff00/hl where|r – where your friends are (those who share their location)",
+    "|cffffff00/hl location [on/off]|r – share my location; |cffffff00/hl map [on/off]|r – show friends on the world map",
     "|cffffff00/hl weapon [on/off]|r – reminder when your weapon has no imbue or poison",
     "|cffffff00/hl imbue main Name|r / |cffffff00off Name|r – what a click on that reminder applies (|cffffff00clear|r to forget)",
     "|cffffff00/hl remind [on/off]|r – reminder for buffs you chose (QoL tab > Choose buffs)",
@@ -1472,6 +1480,14 @@ SlashCmdList.HUENSLISTE = function(msg)
             toggle("campfireReminder", arg, "Campfire reminder")
             HL:UpdateCampfire()
         end
+    elseif cmd == "where" then
+        HL:PrintFriendLocations()
+    elseif cmd == "location" then
+        toggle("shareLocation", arg, "Share my location")
+        HL:UpdateLocationSharing()
+    elseif cmd == "map" then
+        toggle("showFriendsOnMap", arg, "Friends on the world map")
+        HL:RefreshMapPins()
     elseif cmd == "imbue" then
         local sub, name = (rest or ""):match("^(%S*)%s*(.-)%s*$")
         sub = (sub or ""):lower()

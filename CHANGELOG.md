@@ -1,5 +1,8 @@
 # Huens Liste
 
+## v1.11.0
+- Friends on the world map (Quality of Life tab, two separate options, both off by default). "Share my location with friends" sends your zone and position to the same people the lists sync with, at most every 30 seconds while you move and every 2 minutes while you stand still. "Show friends on the world map" draws a class-coloured pin with the name for everyone who shares; hover it for zone and age. Pins disappear 5 minutes after the last update or when the friend enters a dungeon, raid or battleground (the game gives no position there). `/hl where` lists everyone in chat; `/hl location [on/off]`, `/hl map [on/off]`.
+
 ## v1.10.0
 - Click to apply: in the Quality of Life tab, "Choose imbue" lists your known shaman imbues and the poisons, stones and oils in your bags. Left-click one for the main hand, right-click for the off hand. When the weapon reminder shows, left-click the text to apply the first missing one and right-click for the second. The line under the text says what a click does, or that the item isn't in your bags. Out of combat only: the game doesn't allow addons to offer such a button in combat. Also `/hl imbue main Name`, `/hl imbue off Name`, `/hl imbue clear`.
 
