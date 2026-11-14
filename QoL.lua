@@ -1,5 +1,6 @@
 -- Huens Liste: quality-of-life features
 --   Well Fed reminder: movable on-screen warning while you have no food buff
+--   Campfire reminder: the same for the camp buff(s) you picked
 local _, HL = ...
 
 ---------------------------------------------------------------------------
@@ -45,6 +46,80 @@ function HL:HasWellFed()
     return false
 end
 
+---------------------------------------------------------------------------
+-- Campfire buff detection
+---------------------------------------------------------------------------
+-- Camp buffs depend on what was placed at the fire, so there is no fixed name:
+-- the player picks the buff(s) to watch from the buffs they have right now.
+-- settings.campBuffs = { { n = name, id = spellId, icon = icon }, ... }
+local CAMP_ICON = "Interface\\Icons\\Spell_Fire_Fire"
+
+-- List of the player's buffs { name, icon, spellId }, or nil while the game hides them
+function HL:PlayerBuffs()
+    if not (C_UnitAuras and C_UnitAuras.GetAuraDataByIndex) then return nil end
+    local list = {}
+    for i = 1, 255 do
+        local ok, aura = pcall(C_UnitAuras.GetAuraDataByIndex, "player", i, "HELPFUL")
+        if not ok then return nil end
+        if not aura then break end
+        local name, icon, id = aura.name, aura.icon, aura.spellId
+        if HL.IsSecret(name) or HL.IsSecret(icon) or HL.IsSecret(id) then return nil end
+        if type(name) == "string" then
+            list[#list + 1] = { name = name, icon = icon, spellId = id }
+        end
+    end
+    return list
+end
+
+function HL:CampBuffs()
+    local s = self.settings
+    if type(s.campBuffs) ~= "table" then s.campBuffs = {} end
+    return s.campBuffs
+end
+
+local function campIndex(name, id)
+    if type(name) ~= "string" then return nil end
+    local lower = name:lower()
+    for i, b in ipairs(HL:CampBuffs()) do
+        if (id and b.id and b.id == id) or (type(b.n) == "string" and b.n:lower() == lower) then return i end
+    end
+end
+
+function HL:IsCampBuff(name, id) return campIndex(name, id) ~= nil end
+
+-- Add the buff to the watched ones, or remove it if it's already there
+function HL:ToggleCampBuff(name, id, icon)
+    if type(name) ~= "string" or name == "" then return end
+    local list = self:CampBuffs()
+    local i = campIndex(name, id)
+    if i then table.remove(list, i) else list[#list + 1] = { n = name, id = id, icon = icon } end
+    self:UpdateCampfire()
+    return not i
+end
+
+function HL:ClearCampBuffs()
+    self.settings.campBuffs = {}
+    self:UpdateCampfire()
+end
+
+function HL:CampBuffText()
+    local names = {}
+    for _, b in ipairs(self:CampBuffs()) do names[#names + 1] = b.n end
+    if #names == 0 then return "|cffff8040none chosen yet|r" end
+    return table.concat(names, ", ")
+end
+
+-- true / false (any watched buff counts), nil if aura data is hidden or nothing is chosen
+function HL:HasCampBuff()
+    if #self:CampBuffs() == 0 then return nil end
+    local buffs = self:PlayerBuffs()
+    if not buffs then return nil end
+    for _, a in ipairs(buffs) do
+        if campIndex(a.name, a.spellId) then return true end
+    end
+    return false
+end
+
 -- /hl buffs: list your buffs so we can see how the game names them
 function HL:PrintBuffs()
     if not (C_UnitAuras and C_UnitAuras.GetAuraDataByIndex) then return end
@@ -52,122 +127,156 @@ function HL:PrintBuffs()
     for i = 1, 255 do
         local ok, aura = pcall(C_UnitAuras.GetAuraDataByIndex, "player", i, "HELPFUL")
         if not ok or not aura then break end
-        if HL.IsSecret(aura.name) or HL.IsSecret(aura.icon) then
+        if HL.IsSecret(aura.name) or HL.IsSecret(aura.icon) or HL.IsSecret(aura.spellId) then
             print("  (hidden by the game right now)")
         else
-            print(("  %s  |cff888888icon %s, spell %s%s|r"):format(tostring(aura.name), tostring(aura.icon),
-                tostring(aura.spellId), isWellFedAura(aura.name, aura.icon) and ", |cff40ff40= Well Fed|r" or ""))
+            print(("  %s  |cff888888icon %s, spell %s%s%s|r"):format(tostring(aura.name), tostring(aura.icon),
+                tostring(aura.spellId), isWellFedAura(aura.name, aura.icon) and ", |cff40ff40= Well Fed|r" or "",
+                self:IsCampBuff(aura.name, aura.spellId) and ", |cff40ff40= campfire buff|r" or ""))
         end
     end
 end
 
 ---------------------------------------------------------------------------
--- On-screen reminder
+-- On-screen reminders (one movable frame each)
 ---------------------------------------------------------------------------
-local reminder
-local unlocked = false
+-- opts: frameName, posKey, enabledKey, defaultY, text, icon(), has()
+local function newReminder(opts)
+    local r = { unlocked = false }
+    local frame
 
-local function savePosition()
-    local point, _, relPoint, x, y = reminder:GetPoint()
-    HL.settings.wellFedPos = { point, relPoint, x, y }
-end
-
-local function applyPosition()
-    reminder:ClearAllPoints()
-    local p = HL.settings.wellFedPos
-    if type(p) == "table" and p[1] then
-        reminder:SetPoint(p[1], UIParent, p[2], p[3], p[4])
-    else
-        reminder:SetPoint("CENTER", UIParent, "CENTER", 0, 180)
+    local function applyPosition()
+        frame:ClearAllPoints()
+        local p = HL.settings[opts.posKey]
+        if type(p) == "table" and p[1] then
+            frame:SetPoint(p[1], UIParent, p[2], p[3], p[4])
+        else
+            frame:SetPoint("CENTER", UIParent, "CENTER", 0, opts.defaultY)
+        end
     end
-end
 
-local function createReminder()
-    reminder = CreateFrame("Frame", "HuensListeWellFedFrame", UIParent)
-    reminder:SetSize(340, 44)
-    reminder:SetFrameStrata("MEDIUM") -- below windows like /hl, above the game world
-    reminder:SetClampedToScreen(true)
-    reminder:SetMovable(true)
-    reminder:RegisterForDrag("LeftButton")
-    reminder:SetScript("OnDragStart", reminder.StartMoving)
-    reminder:SetScript("OnDragStop", function(self)
-        self:StopMovingOrSizing()
-        savePosition()
-    end)
+    function r.create()
+        frame = CreateFrame("Frame", opts.frameName, UIParent)
+        frame:SetSize(opts.width or 340, 44)
+        frame:SetFrameStrata("MEDIUM") -- below windows like /hl, above the game world
+        frame:SetClampedToScreen(true)
+        frame:SetMovable(true)
+        frame:RegisterForDrag("LeftButton")
+        frame:SetScript("OnDragStart", frame.StartMoving)
+        frame:SetScript("OnDragStop", function(self)
+            self:StopMovingOrSizing()
+            local point, _, relPoint, x, y = self:GetPoint()
+            HL.settings[opts.posKey] = { point, relPoint, x, y }
+        end)
 
-    reminder.bg = reminder:CreateTexture(nil, "BACKGROUND")
-    reminder.bg:SetAllPoints()
-    reminder.bg:SetColorTexture(0, 0, 0, 0.55)
+        frame.bg = frame:CreateTexture(nil, "BACKGROUND")
+        frame.bg:SetAllPoints()
+        frame.bg:SetColorTexture(0, 0, 0, 0.55)
 
-    reminder.icon = reminder:CreateTexture(nil, "ARTWORK")
-    reminder.icon:SetTexture(FOOD_ICON)
-    reminder.icon:SetSize(32, 32)
-    reminder.icon:SetPoint("LEFT", 6, 0)
+        frame.icon = frame:CreateTexture(nil, "ARTWORK")
+        frame.icon:SetTexture(opts.icon())
+        frame.icon:SetSize(32, 32)
+        frame.icon:SetPoint("LEFT", 6, 0)
 
-    reminder.text = reminder:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
-    reminder.text:SetPoint("LEFT", reminder.icon, "RIGHT", 8, 0)
-    reminder.text:SetTextColor(1, 0.55, 0.1)
-    reminder.text:SetText("You are not Well Fed!")
+        frame.text = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+        frame.text:SetPoint("LEFT", frame.icon, "RIGHT", 8, 0)
+        frame.text:SetTextColor(1, 0.55, 0.1)
+        frame.text:SetText(opts.text)
 
-    reminder.hint = reminder:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    reminder.hint:SetPoint("TOP", reminder, "BOTTOM", 0, -2)
-    reminder.hint:SetText("Drag to move – click \"Lock position\" in /hl when done")
+        frame.hint = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        frame.hint:SetPoint("TOP", frame, "BOTTOM", 0, -2)
+        frame.hint:SetText("Drag to move – click \"Lock\" in /hl when done")
 
-    local ag = reminder.text:CreateAnimationGroup()
-    ag:SetLooping("BOUNCE")
-    local a = ag:CreateAnimation("Alpha")
-    a:SetFromAlpha(1)
-    a:SetToAlpha(0.45)
-    a:SetDuration(0.8)
-    reminder.anim = ag
+        local ag = frame.text:CreateAnimationGroup()
+        ag:SetLooping("BOUNCE")
+        local a = ag:CreateAnimation("Alpha")
+        a:SetFromAlpha(1)
+        a:SetToAlpha(0.45)
+        a:SetDuration(0.8)
+        frame.anim = ag
 
-    applyPosition()
-    reminder:Hide()
-end
-
-local function setVisible(show)
-    if show then
-        if not reminder:IsShown() then reminder:Show(); reminder.anim:Play() end
-    else
-        reminder.anim:Stop()
-        reminder:Hide()
+        applyPosition()
+        frame:Hide()
     end
+
+    local function setVisible(show)
+        if show then
+            if not frame:IsShown() then frame:Show(); frame.anim:Play() end
+        else
+            frame.anim:Stop()
+            frame:Hide()
+        end
+    end
+
+    function r.update()
+        if not frame or not HL.settings then return end
+        frame.icon:SetTexture(opts.icon())
+
+        -- Move mode: always visible, draggable, with background and hint
+        frame:EnableMouse(r.unlocked)
+        frame.bg:SetShown(r.unlocked)
+        frame.hint:SetShown(r.unlocked)
+        if r.unlocked then setVisible(true) return end
+
+        if not HL.settings[opts.enabledKey] then setVisible(false) return end
+        local okDead, dead = pcall(UnitIsDeadOrGhost, "player")
+        if okDead and not HL.IsSecret(dead) and dead then setVisible(false) return end
+
+        local has = opts.has()
+        if has == nil then -- data hidden right now: keep the current state
+            if opts.hideWhenUnknown and opts.hideWhenUnknown() then setVisible(false) end
+            return
+        end
+        setVisible(not has)
+    end
+
+    function r.setUnlocked(state)
+        r.unlocked = state and true or false
+        r.update()
+    end
+
+    function r.resetPosition()
+        HL.settings[opts.posKey] = nil
+        if frame then applyPosition() end
+    end
+
+    return r
 end
 
-function HL:UpdateWellFed()
-    if not reminder or not self.settings then return end
+local wellFed = newReminder({
+    frameName = "HuensListeWellFedFrame", posKey = "wellFedPos", enabledKey = "wellFedReminder",
+    defaultY = 180, text = "You are not Well Fed!",
+    icon = function() return FOOD_ICON end,
+    has = function() return HL:HasWellFed() end,
+})
 
-    -- Move mode: always visible, draggable, with background and hint
-    reminder:EnableMouse(unlocked)
-    reminder.bg:SetShown(unlocked)
-    reminder.hint:SetShown(unlocked)
-    if unlocked then setVisible(true) return end
+local campfire = newReminder({
+    frameName = "HuensListeCampfireFrame", posKey = "campfirePos", enabledKey = "campfireReminder",
+    defaultY = 130, width = 400, text = "Campfire buff is missing!",
+    icon = function()
+        local first = HL.settings and HL:CampBuffs()[1]
+        return first and first.icon or CAMP_ICON
+    end,
+    has = function() return HL:HasCampBuff() end,
+    -- no buff chosen: nothing to remind about
+    hideWhenUnknown = function() return #HL:CampBuffs() == 0 end,
+})
 
-    if not self.settings.wellFedReminder then setVisible(false) return end
-    local okDead, dead = pcall(UnitIsDeadOrGhost, "player")
-    if okDead and not HL.IsSecret(dead) and dead then setVisible(false) return end
+function HL:UpdateWellFed() wellFed.update() end
+function HL:IsWellFedUnlocked() return wellFed.unlocked end
+function HL:SetWellFedUnlocked(state) wellFed.setUnlocked(state) end
+function HL:ResetWellFedPosition() wellFed.resetPosition() end
 
-    local has = self:HasWellFed()
-    if has == nil then return end -- data hidden right now: keep the current state
-    setVisible(not has)
-end
-
-function HL:IsWellFedUnlocked() return unlocked end
-
-function HL:SetWellFedUnlocked(state)
-    unlocked = state and true or false
-    self:UpdateWellFed()
-end
-
-function HL:ResetWellFedPosition()
-    self.settings.wellFedPos = nil
-    if reminder then applyPosition() end
-end
+function HL:UpdateCampfire() campfire.update() end
+function HL:IsCampfireUnlocked() return campfire.unlocked end
+function HL:SetCampfireUnlocked(state) campfire.setUnlocked(state) end
+function HL:ResetCampfirePosition() campfire.resetPosition() end
 
 -- Every Quality of Life option is opt-in: off until the player ticks it in the
 -- Quality of Life tab. Add new options here with false.
 local QOL_DEFAULTS = {
     wellFedReminder = false,
+    campfireReminder = false,
     targetButton = false,
     quietPvP = false,
     quietCities = false,
@@ -184,13 +293,15 @@ HL:On("PLAYER_LOGIN", function()
         HL.settings.qolOptInDone = true
         HL.settings.wellFedReminder = false
     end
-    createReminder()
-    HL:UpdateWellFed()
+    wellFed.create()
+    campfire.create()
+    wellFed.update()
+    campfire.update()
 end)
 
 HL:On("UNIT_AURA", function(unit)
-    if unit == "player" then HL:UpdateWellFed() end
+    if unit == "player" then wellFed.update(); campfire.update() end
 end)
 for _, ev in ipairs({ "PLAYER_ENTERING_WORLD", "PLAYER_REGEN_ENABLED", "PLAYER_DEAD", "PLAYER_ALIVE", "PLAYER_UNGHOST" }) do
-    HL:On(ev, function() HL:UpdateWellFed() end)
+    HL:On(ev, function() wellFed.update(); campfire.update() end)
 end

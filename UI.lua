@@ -514,36 +514,136 @@ function HL:BuildQoLPage(parent)
     header:SetPoint("TOPLEFT", 20, -36)
     header:SetText("Quality of Life")
 
-    -- Well Fed reminder
+    -- Buff reminders: Well Fed and campfire
     local section = page:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     section:SetPoint("TOPLEFT", 20, -72)
-    section:SetText("Well Fed reminder")
+    section:SetText("Buff reminders (on-screen text, hidden while you are dead)")
 
-    makeCheck(page, "Show a reminder when I'm not Well Fed", "wellFedReminder", { "TOPLEFT", 16, -90 },
-        function() HL:UpdateWellFed() end)
-
-    local desc = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    desc:SetPoint("TOPLEFT", 44, -116)
-    desc:SetWidth(520)
-    desc:SetJustifyH("LEFT")
-    desc:SetText("Shows \"You are not Well Fed!\" on screen while you have no food buff. Hidden while you are dead.")
-
-    local moveBtn = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
-    moveBtn:SetSize(120, 22)
-    moveBtn:SetPoint("TOPLEFT", 44, -138)
-    local function refreshMoveText()
-        moveBtn:SetText(HL:IsWellFedUnlocked() and "Lock position" or "Move reminder")
+    -- One row: checkbox on the left, Move / Reset buttons on the right
+    local refreshers = {}
+    local function reminderRow(y, label, key, update, isUnlocked, setUnlocked, resetPos)
+        makeCheck(page, label, key, { "TOPLEFT", 16, y }, update)
+        local moveBtn = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+        moveBtn:SetSize(80, 22)
+        moveBtn:SetPoint("TOPLEFT", 400, y - 1)
+        local function refresh() moveBtn:SetText(isUnlocked() and "Lock" or "Move") end
+        moveBtn:SetScript("OnClick", function()
+            setUnlocked(not isUnlocked())
+            refresh()
+        end)
+        local resetBtn = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+        resetBtn:SetSize(80, 22)
+        resetBtn:SetPoint("LEFT", moveBtn, "RIGHT", 6, 0)
+        resetBtn:SetText("Reset")
+        resetBtn:SetScript("OnClick", resetPos)
+        refreshers[#refreshers + 1] = refresh
     end
-    moveBtn:SetScript("OnClick", function()
-        HL:SetWellFedUnlocked(not HL:IsWellFedUnlocked())
-        refreshMoveText()
-    end)
 
-    local resetBtn = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
-    resetBtn:SetSize(120, 22)
-    resetBtn:SetPoint("LEFT", moveBtn, "RIGHT", 8, 0)
-    resetBtn:SetText("Reset position")
-    resetBtn:SetScript("OnClick", function() HL:ResetWellFedPosition() end)
+    reminderRow(-90, "Remind me when I'm not Well Fed", "wellFedReminder",
+        function() HL:UpdateWellFed() end,
+        function() return HL:IsWellFedUnlocked() end,
+        function(v) HL:SetWellFedUnlocked(v) end,
+        function() HL:ResetWellFedPosition() end)
+    reminderRow(-114, "Remind me when my campfire buff is missing", "campfireReminder",
+        function() HL:UpdateCampfire() end,
+        function() return HL:IsCampfireUnlocked() end,
+        function(v) HL:SetCampfireUnlocked(v) end,
+        function() HL:ResetCampfirePosition() end)
+
+    -- Which buff counts as "the campfire buff": picked from the buffs you have now
+    local chooseBtn = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+    chooseBtn:SetSize(120, 22)
+    chooseBtn:SetPoint("TOPLEFT", 44, -142)
+    chooseBtn:SetText("Choose buff...")
+
+    local campText = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    campText:SetPoint("LEFT", chooseBtn, "RIGHT", 8, 0)
+    campText:SetWidth(390)
+    campText:SetJustifyH("LEFT")
+    if campText.SetWordWrap then campText:SetWordWrap(false) end
+    local function refreshCampText()
+        campText:SetText("Campfire buff: " .. HL:CampBuffText())
+    end
+
+    -- Picker: your current buffs as a click list
+    local picker = CreateFrame("Frame", nil, page, "BackdropTemplate")
+    picker:SetSize(300, 60)
+    picker:SetPoint("TOPLEFT", chooseBtn, "BOTTOMLEFT", 0, -2)
+    picker:SetFrameStrata("DIALOG")
+    picker:EnableMouse(true)
+    if picker.SetBackdrop then
+        picker:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            edgeSize = 12, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
+        picker:SetBackdropColor(0.05, 0.05, 0.05, 0.97)
+        picker:SetBackdropBorderColor(0.6, 0.6, 0.6)
+    end
+    picker:Hide()
+    picker.title = picker:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    picker.title:SetPoint("TOPLEFT", 10, -8)
+    picker.title:SetWidth(280)
+    picker.title:SetJustifyH("LEFT")
+    picker.rows = {}
+
+    local MAX_PICK = 14
+    local function refreshPicker()
+        local buffs = HL:PlayerBuffs()
+        local items = {}
+        local seen = {}
+        -- watched buffs first (so they can be removed even when you don't have them)
+        for _, b in ipairs(HL:CampBuffs()) do
+            items[#items + 1] = { name = b.n, spellId = b.id, icon = b.icon }
+            seen[b.n:lower()] = true
+        end
+        for _, a in ipairs(buffs or {}) do
+            if not seen[a.name:lower()] then
+                seen[a.name:lower()] = true
+                items[#items + 1] = a
+            end
+        end
+        if not buffs then
+            picker.title:SetText("The game hides your buffs right now (combat). Try again after the fight.")
+        elseif #items == 0 then
+            picker.title:SetText("You have no buffs right now. Rest at a campfire first, then choose.")
+        else
+            picker.title:SetText("Click the buff you get from the campfire:")
+        end
+        local shown = math.min(#items, MAX_PICK)
+        for i = 1, shown do
+            local row = picker.rows[i]
+            if not row then
+                row = CreateFrame("Button", nil, picker)
+                row:SetSize(280, 18)
+                row:SetPoint("TOPLEFT", 10, -28 - (i - 1) * 18)
+                row.icon = row:CreateTexture(nil, "ARTWORK")
+                row.icon:SetSize(16, 16)
+                row.icon:SetPoint("LEFT", 0, 0)
+                row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+                row.text:SetPoint("LEFT", 20, 0)
+                row.text:SetWidth(258)
+                row.text:SetJustifyH("LEFT")
+                if row.text.SetWordWrap then row.text:SetWordWrap(false) end
+                local hl = row:CreateTexture(nil, "HIGHLIGHT")
+                hl:SetAllPoints()
+                hl:SetColorTexture(1, 1, 1, 0.12)
+                picker.rows[i] = row
+            end
+            local item = items[i]
+            local watched = HL:IsCampBuff(item.name, item.spellId)
+            row.icon:SetTexture(item.icon)
+            row.text:SetText((watched and "|cff40ff40[x]|r " or "[  ] ") .. item.name)
+            row:SetScript("OnClick", function()
+                HL:ToggleCampBuff(item.name, item.spellId, item.icon)
+                refreshPicker()
+                refreshCampText()
+            end)
+            row:Show()
+        end
+        for i = shown + 1, #picker.rows do picker.rows[i]:Hide() end
+        picker:SetHeight(36 + shown * 18 + (shown == 0 and 14 or 0))
+    end
+    chooseBtn:SetScript("OnClick", function()
+        if picker:IsShown() then picker:Hide() else refreshPicker(); picker:Show() end
+    end)
 
     -- KOS target button
     local tsection = page:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -582,10 +682,15 @@ function HL:BuildQoLPage(parent)
 
     makeCheck(page, "After a gank: offer to add my killer to the KOS List (not in battlegrounds)", "gankSuggest", { "TOPLEFT", 16, -362 })
 
-    page:SetScript("OnShow", refreshMoveText)
-    -- Leaving the window locks the reminder again
+    page:SetScript("OnShow", function()
+        for _, refresh in ipairs(refreshers) do refresh() end
+        refreshCampText()
+    end)
+    -- Leaving the window locks the reminders again
     page:SetScript("OnHide", function()
+        picker:Hide()
         if HL:IsWellFedUnlocked() then HL:SetWellFedUnlocked(false) end
+        if HL:IsCampfireUnlocked() then HL:SetCampfireUnlocked(false) end
     end)
     return page
 end
@@ -1141,7 +1246,9 @@ local HELP = {
     "|cffffff00/hl offset <pixels>|r / |cffffff00/hl scale <0.5-2>|r – move/resize the nameplate skull",
     "|cffffff00/hl minimap [on/off]|r – show/hide the minimap button",
     "|cffffff00/hl wellfed [on/off]|r – Well Fed reminder (move it in the Quality of Life tab)",
-    "|cffffff00/hl buffs|r – list your buffs (troubleshooting for the Well Fed check)",
+    "|cffffff00/hl campfire [on/off]|r – campfire buff reminder (choose the buff in the Quality of Life tab)",
+    "|cffffff00/hl campfire set Buff Name|r – watch a buff by name; |cffffff00/hl campfire clear|r – forget all",
+    "|cffffff00/hl buffs|r – list your buffs (troubleshooting for the reminders)",
     "|cffffff00/hl export|r / |cffffff00/hl import|r – share via copy & paste",
 }
 
@@ -1256,6 +1363,22 @@ SlashCmdList.HUENSLISTE = function(msg)
     elseif cmd == "wellfed" then
         toggle("wellFedReminder", arg, "Well Fed reminder")
         HL:UpdateWellFed()
+    elseif cmd == "campfire" or cmd == "camp" then
+        local sub, name = (rest or ""):match("^(%S*)%s*(.-)%s*$")
+        sub = (sub or ""):lower()
+        if sub == "set" and name ~= "" then
+            if not HL:IsCampBuff(name) then HL:ToggleCampBuff(name) end
+            HL:Print("Campfire buff: " .. HL:CampBuffText())
+        elseif sub == "clear" then
+            HL:ClearCampBuffs()
+            HL:Print("Campfire buff: " .. HL:CampBuffText())
+        else
+            toggle("campfireReminder", arg, "Campfire reminder")
+            if HL.settings.campfireReminder and #HL:CampBuffs() == 0 then
+                HL:Print("Choose your campfire buff in the QoL tab (or /hl campfire set Buff Name).")
+            end
+            HL:UpdateCampfire()
+        end
     elseif cmd == "buffs" then
         HL:PrintBuffs()
     elseif cmd == "minimap" then

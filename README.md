@@ -23,7 +23,7 @@ Getting ganked? Put the ganker on the list. Everyone in your group of friends ge
 - **Right-click menu:** right-click any player and pick **Add to Huens Liste (KOS)** to add them with an optional reason
 - **List window:** add, remove, see who added whom and when each player was last seen
 - **Export/import:** share the whole list as a text string, e.g. on Discord
-- **Quality of Life tab (all options off until you turn them on):** a movable **Well Fed reminder** that shows up while you have no food buff
+- **Quality of Life tab (all options off until you turn them on):** a movable **Well Fed reminder** that shows up while you have no food buff, a **campfire buff reminder** for the camp buff you pick
 - **Users tab:** see who in your group of friends has the addon, which version they run and who is online
 - **Update notice:** a popup tells you when a friend has a newer version
 - **Minimap button** and an addon compartment entry
@@ -50,6 +50,7 @@ Getting ganked? Put the ganker on the list. Everyone in your group of friends ge
 | `/hl guild` / `group` / `alerts` / `sound` / `share` / `remote` `[on/off]` | Toggles |
 | `/hl minimap [on/off]` | Show/hide the minimap button |
 | `/hl wellfed [on/off]` | Well Fed reminder on/off (move it in the Quality of Life tab) |
+| `/hl campfire [on/off]` | Campfire buff reminder on/off (choose the buff in the Quality of Life tab); `set Buff Name` / `clear` |
 | `/hl buffs` | List your buffs (troubleshooting) |
 | `/hl offset <px>`, `/hl scale <0.5–2>` | Move/resize the nameplate skull |
 | `/hl export`, `/hl import` | Share the list by copy & paste |
