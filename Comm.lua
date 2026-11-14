@@ -444,7 +444,7 @@ HL:On("CHAT_MSG_ADDON", function(prefix, msg, channel, rawSender)
                     -- stay quiet if the add shows up, it reports the move
                     C_Timer.After(2, function()
                         if not HL:Get(rec.n, other) and not HL:Get(rec.n, list) then
-                            HL:Print(who .. " removed " .. HL.ColorName(name, list) .. " from the " .. HL.ListLabel(list))
+                            HL:Print(who .. " |cffff4040removed|r " .. HL.ColorName(name, list) .. " from the " .. HL.ListLabel(list))
                         end
                     end)
                 else
@@ -454,7 +454,7 @@ HL:On("CHAT_MSG_ADDON", function(prefix, msg, channel, rawSender)
                         HL:Print(who .. " updated the note on " .. HL.ColorName(name, list) .. ": "
                             .. (rec.r ~= "" and rec.r or "|cff888888(removed)|r"))
                     else
-                        HL:Print(who .. (moved and " moved " or " added ") .. HL.ColorName(name, list) .. " to the "
+                        HL:Print(who .. (moved and " moved " or " |cff40ff40added|r ") .. HL.ColorName(name, list) .. " to the "
                             .. HL.ListLabel(list) .. (rec.r ~= "" and (" (" .. rec.r .. ")") or ""))
                     end
                 end

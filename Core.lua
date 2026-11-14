@@ -383,7 +383,7 @@ function HL:Add(full, reason, list, relation)
     if moved then self:SetEntry(moved.n, moved.r, true, other) end
     local existed = self:Get(full, list)
     self:SetEntry(full, reason, nil, list)
-    local verb = moved and "Moved" or (existed and "Updated" or "Added")
+    local verb = moved and "Moved" or (existed and "Updated" or "|cff40ff40Added|r")
     self:Print(("%s %s %s the %s%s"):format(verb, HL.ColorName(HL.ShortName(full), list), existed and not moved and "on" or "to",
         HL.ListLabel(list), reason ~= "" and (" (" .. reason .. ")") or ""))
 end
@@ -395,7 +395,7 @@ function HL:Remove(full, list)
     if list then e = full and self:Get(full, list) else list, e = self:Find(full or "") end
     if not e then self:Print("Not on a list: " .. tostring(full)) return end
     self:SetEntry(e.n, e.r, true, list)
-    self:Print("Removed " .. HL.ColorName(HL.ShortName(e.n), list) .. " from the " .. HL.ListLabel(list))
+    self:Print("|cffff4040Removed|r " .. HL.ColorName(HL.ShortName(e.n), list) .. " from the " .. HL.ListLabel(list))
 end
 
 -- Change the note (reason) of a player who's already on a list
