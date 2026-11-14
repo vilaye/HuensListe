@@ -1,5 +1,8 @@
 # Huens Liste
 
+## v1.8.0
+- Own buff reminders (Quality of Life tab, off by default): choose any buffs you always want up, for example Find Minerals, and a movable "Missing: Find Minerals" text shows while one of them is gone. "Choose buffs" lists your current buffs to click; `/hl remind add Buff Name` adds one by name without having it. Also `/hl remind [on/off]`, `del Buff Name`, `clear`, `list`.
+
 ## v1.7.1
 - Campfire reminder: taking the extra experience gives the Boosted Rest debuff (spell 1229451) instead of the buff. That now counts too, and the text is "No campfire or Boosted Rest buff!".
 

@@ -550,11 +550,94 @@ function HL:BuildQoLPage(parent)
         function(v) HL:SetCampfireUnlocked(v) end,
         function() HL:ResetCampfirePosition() end)
 
-    local desc = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    desc:SetPoint("TOPLEFT", 44, -142)
-    desc:SetWidth(520)
-    desc:SetJustifyH("LEFT")
-    desc:SetText("Shows \"You are not Well Fed!\" / \"No campfire or Boosted Rest buff!\" on screen while it is gone.")
+    reminderRow(-138, "Remind me when a chosen buff is missing", "buffWatchReminder",
+        function() HL:UpdateBuffWatch() end,
+        function() return HL:IsBuffWatchUnlocked() end,
+        function(v) HL:SetBuffWatchUnlocked(v) end,
+        function() HL:ResetBuffWatchPosition() end)
+
+    -- Which buffs to watch: picked from the buffs you have right now
+    local chooseBtn = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+    chooseBtn:SetSize(96, 22)
+    chooseBtn:SetPoint("TOPLEFT", 298, -139)
+    chooseBtn:SetText("Choose buffs")
+
+    local picker = CreateFrame("Frame", nil, page, "BackdropTemplate")
+    picker:SetSize(300, 60)
+    picker:SetPoint("TOPLEFT", chooseBtn, "BOTTOMLEFT", 0, -2)
+    picker:SetFrameStrata("DIALOG")
+    picker:EnableMouse(true)
+    if picker.SetBackdrop then
+        picker:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            edgeSize = 12, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
+        picker:SetBackdropColor(0.05, 0.05, 0.05, 0.97)
+        picker:SetBackdropBorderColor(0.6, 0.6, 0.6)
+    end
+    picker:Hide()
+    picker.title = picker:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    picker.title:SetPoint("TOPLEFT", 10, -8)
+    picker.title:SetWidth(280)
+    picker.title:SetJustifyH("LEFT")
+    picker.rows = {}
+
+    local MAX_PICK = 12
+    local function refreshPicker()
+        local buffs = HL:PlayerBuffs()
+        local items, seen = {}, {}
+        -- watched buffs first (so they can be removed even when you don't have them)
+        for _, b in ipairs(HL:WatchBuffs()) do
+            items[#items + 1] = { name = b.n, spellId = b.id, icon = b.icon }
+            seen[b.n:lower()] = true
+        end
+        for _, a in ipairs(buffs or {}) do
+            if not seen[a.name:lower()] then
+                seen[a.name:lower()] = true
+                items[#items + 1] = a
+            end
+        end
+        if not buffs then
+            picker.title:SetText("The game hides your buffs right now (combat).\nTry again after the fight.")
+        elseif #items == 0 then
+            picker.title:SetText("You have no buffs right now. Get the buff\nfirst, or type /hl remind add Buff Name")
+        else
+            picker.title:SetText("Click the buffs to watch (your current buffs).\nOr type /hl remind add Buff Name")
+        end
+        local shown = math.min(#items, MAX_PICK)
+        for i = 1, shown do
+            local row = picker.rows[i]
+            if not row then
+                row = CreateFrame("Button", nil, picker)
+                row:SetSize(280, 18)
+                row:SetPoint("TOPLEFT", 10, -38 - (i - 1) * 18)
+                row.icon = row:CreateTexture(nil, "ARTWORK")
+                row.icon:SetSize(16, 16)
+                row.icon:SetPoint("LEFT", 0, 0)
+                row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+                row.text:SetPoint("LEFT", 20, 0)
+                row.text:SetWidth(258)
+                row.text:SetJustifyH("LEFT")
+                if row.text.SetWordWrap then row.text:SetWordWrap(false) end
+                local hl = row:CreateTexture(nil, "HIGHLIGHT")
+                hl:SetAllPoints()
+                hl:SetColorTexture(1, 1, 1, 0.12)
+                picker.rows[i] = row
+            end
+            local item = items[i]
+            local watched = HL:IsWatchedBuff(item.name, item.spellId)
+            row.icon:SetTexture(item.icon)
+            row.text:SetText((watched and "|cff40ff40[x]|r " or "[  ] ") .. item.name)
+            row:SetScript("OnClick", function()
+                HL:ToggleWatchBuff(item.name, item.spellId, item.icon)
+                refreshPicker()
+            end)
+            row:Show()
+        end
+        for i = shown + 1, #picker.rows do picker.rows[i]:Hide() end
+        picker:SetHeight(46 + shown * 18)
+    end
+    chooseBtn:SetScript("OnClick", function()
+        if picker:IsShown() then picker:Hide() else refreshPicker(); picker:Show() end
+    end)
 
     -- KOS target button
     local tsection = page:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -600,6 +683,8 @@ function HL:BuildQoLPage(parent)
     page:SetScript("OnHide", function()
         if HL:IsWellFedUnlocked() then HL:SetWellFedUnlocked(false) end
         if HL:IsCampfireUnlocked() then HL:SetCampfireUnlocked(false) end
+        if HL:IsBuffWatchUnlocked() then HL:SetBuffWatchUnlocked(false) end
+        picker:Hide()
     end)
     return page
 end
@@ -1156,6 +1241,8 @@ local HELP = {
     "|cffffff00/hl minimap [on/off]|r – show/hide the minimap button",
     "|cffffff00/hl wellfed [on/off]|r – Well Fed reminder (move it in the Quality of Life tab)",
     "|cffffff00/hl campfire [on/off]|r – campfire buff reminder (move it in the Quality of Life tab)",
+    "|cffffff00/hl remind [on/off]|r – reminder for buffs you chose (QoL tab > Choose buffs)",
+    "|cffffff00/hl remind add Buff Name|r – watch a buff; |cffffff00del Buff Name|r, |cffffff00clear|r, |cffffff00list|r",
     "|cffffff00/hl buffs|r – list your buffs (troubleshooting for the reminders)",
     "|cffffff00/hl export|r / |cffffff00/hl import|r – share via copy & paste",
 }
@@ -1283,6 +1370,30 @@ SlashCmdList.HUENSLISTE = function(msg)
         else
             toggle("campfireReminder", arg, "Campfire reminder")
             HL:UpdateCampfire()
+        end
+    elseif cmd == "remind" then
+        local sub, name = (rest or ""):match("^(%S*)%s*(.-)%s*$")
+        sub = (sub or ""):lower()
+        if sub == "add" and name ~= "" then
+            if not HL:IsWatchedBuff(name) then HL:ToggleWatchBuff(name) end
+            HL:Print("Watched buffs: " .. HL:WatchBuffText())
+            if not HL.settings.buffWatchReminder then
+                HL:Print("The reminder is off. Turn it on with /hl remind on")
+            end
+        elseif (sub == "del" or sub == "remove") and name ~= "" then
+            if HL:IsWatchedBuff(name) then HL:ToggleWatchBuff(name) end
+            HL:Print("Watched buffs: " .. HL:WatchBuffText())
+        elseif sub == "clear" then
+            HL:ClearWatchBuffs()
+            HL:Print("Watched buffs: " .. HL:WatchBuffText())
+        elseif sub == "list" then
+            HL:Print("Watched buffs: " .. HL:WatchBuffText())
+        else
+            toggle("buffWatchReminder", arg, "Own buff reminder")
+            if HL.settings.buffWatchReminder and #HL:WatchBuffs() == 0 then
+                HL:Print("No buffs chosen yet: QoL tab > Choose buffs, or /hl remind add Buff Name")
+            end
+            HL:UpdateBuffWatch()
         end
     elseif cmd == "buffs" then
         HL:PrintBuffs()

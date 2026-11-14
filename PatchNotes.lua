@@ -3,6 +3,9 @@
 local _, HL = ...
 
 HL.PATCH_NOTES = {
+    { version = "1.8.0", notes = {
+        "Own buff reminders: choose any buffs (e.g. Find Minerals) and get a reminder when one is missing (Quality of Life, off by default)",
+    } },
     { version = "1.7.1", notes = {
         "Campfire reminder: the Boosted Rest debuff (extra experience) counts too",
     } },

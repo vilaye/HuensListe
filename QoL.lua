@@ -1,6 +1,7 @@
 -- Huens Liste: quality-of-life features
 --   Well Fed reminder: movable on-screen warning while you have no food buff
 --   Campfire reminder: the same for the campfire buff / Boosted Rest debuff
+--   Own buff reminder: the same for buffs the player picked (e.g. Find Minerals)
 local _, HL = ...
 
 ---------------------------------------------------------------------------
@@ -150,6 +151,73 @@ function HL:HasCampBuff()
     return false
 end
 
+---------------------------------------------------------------------------
+-- Own buff reminders: buffs the player picked (e.g. "Find Minerals")
+---------------------------------------------------------------------------
+-- settings.watchBuffs = { { n = name, id = spellId, icon = icon }, ... }
+-- Unlike the campfire check, every watched buff has to be up.
+function HL:WatchBuffs()
+    local s = self.settings
+    if type(s.watchBuffs) ~= "table" then s.watchBuffs = {} end
+    return s.watchBuffs
+end
+
+local function watchIndex(name, id)
+    local lower = type(name) == "string" and name:lower() or nil
+    for i, b in ipairs(HL:WatchBuffs()) do
+        if (id and b.id and b.id == id) or (lower and type(b.n) == "string" and b.n:lower() == lower) then return i end
+    end
+end
+
+function HL:IsWatchedBuff(name, id) return watchIndex(name, id) ~= nil end
+
+-- Add the buff to the watched ones, or remove it if it's already there.
+-- Returns true if it is watched afterwards.
+function HL:ToggleWatchBuff(name, id, icon)
+    if type(name) ~= "string" or name == "" then return end
+    local list = self:WatchBuffs()
+    local i = watchIndex(name, id)
+    if i then table.remove(list, i) else list[#list + 1] = { n = name, id = id, icon = icon } end
+    self:UpdateBuffWatch()
+    return not i
+end
+
+function HL:ClearWatchBuffs()
+    self.settings.watchBuffs = {}
+    self:UpdateBuffWatch()
+end
+
+function HL:WatchBuffText()
+    local names = {}
+    for _, b in ipairs(self:WatchBuffs()) do names[#names + 1] = b.n end
+    if #names == 0 then return "none chosen yet" end
+    return table.concat(names, ", ")
+end
+
+-- List of watched buffs that are not up right now; nil if aura data is hidden
+function HL:MissingWatchBuffs()
+    local watched = self:WatchBuffs()
+    if #watched == 0 then return {} end
+    local buffs = self:PlayerBuffs()
+    if not buffs then return nil end
+    local missing = {}
+    for _, b in ipairs(watched) do
+        local found = false
+        local lower = type(b.n) == "string" and b.n:lower() or nil
+        for _, a in ipairs(buffs) do
+            if (b.id and a.spellId == b.id) or (lower and a.name:lower() == lower) then
+                found = true
+                -- learn spell ID and icon for buffs that were added by name
+                if not b.id then b.id = a.spellId end
+                if not b.icon then b.icon = a.icon end
+                break
+            end
+        end
+        if not found then missing[#missing + 1] = b end
+    end
+    return missing
+end
+
 -- /hl buffs: list your buffs so we can see how the game names them
 function HL:PrintBuffs()
     if not (C_UnitAuras and C_UnitAuras.GetAuraDataByIndex) then return end
@@ -162,7 +230,8 @@ function HL:PrintBuffs()
         else
             print(("  %s  |cff888888icon %s, spell %s%s%s|r"):format(tostring(aura.name), tostring(aura.icon),
                 tostring(aura.spellId), isWellFedAura(aura.name, aura.icon) and ", |cff40ff40= Well Fed|r" or "",
-                self:IsCampBuff(aura.name, aura.spellId) and ", |cff40ff40= campfire buff|r" or ""))
+                (self:IsCampBuff(aura.name, aura.spellId) and ", |cff40ff40= campfire buff|r" or "")
+                .. (self:IsWatchedBuff(aura.name, aura.spellId) and ", |cff40ff40= watched|r" or "")))
         end
     end
     local rest = hasBoostedRest()
@@ -172,7 +241,7 @@ end
 ---------------------------------------------------------------------------
 -- On-screen reminders (one movable frame each)
 ---------------------------------------------------------------------------
--- opts: frameName, posKey, enabledKey, defaultY, text, icon(), has()
+-- opts: frameName, posKey, enabledKey, defaultY, text (string or function), icon(), has()
 local function newReminder(opts)
     local r = { unlocked = false }
     local frame
@@ -213,7 +282,7 @@ local function newReminder(opts)
         frame.text = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
         frame.text:SetPoint("LEFT", frame.icon, "RIGHT", 8, 0)
         frame.text:SetTextColor(1, 0.55, 0.1)
-        frame.text:SetText(opts.text)
+        frame.text:SetText(type(opts.text) == "function" and opts.text() or opts.text)
 
         frame.hint = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         frame.hint:SetPoint("TOP", frame, "BOTTOM", 0, -2)
@@ -256,6 +325,10 @@ local function newReminder(opts)
 
         local has = opts.has()
         if has == nil then return end -- data hidden right now: keep the current state
+        if not has and type(opts.text) == "function" then
+            frame.text:SetText(opts.text())
+            frame.icon:SetTexture(opts.icon())
+        end
         setVisible(not has)
     end
 
@@ -286,6 +359,32 @@ local campfire = newReminder({
     has = function() return HL:HasCampBuff() end,
 })
 
+-- Own buffs: one frame that names what is missing
+local QUESTION_ICON = "Interface\\Icons\\INV_Misc_QuestionMark"
+local missingNow = {}
+local buffWatch = newReminder({
+    frameName = "HuensListeBuffWatchFrame", posKey = "buffWatchPos", enabledKey = "buffWatchReminder",
+    defaultY = 80, width = 480,
+    text = function()
+        local names = {}
+        for _, b in ipairs(missingNow) do names[#names + 1] = b.n end
+        if #names == 0 then return "Missing: your buff" end -- move mode
+        return "Missing: " .. table.concat(names, ", ")
+    end,
+    icon = function() return (missingNow[1] and missingNow[1].icon) or QUESTION_ICON end,
+    has = function()
+        local missing = HL:MissingWatchBuffs()
+        if not missing then return nil end
+        missingNow = missing
+        return #missing == 0
+    end,
+})
+
+function HL:UpdateBuffWatch() buffWatch.update() end
+function HL:IsBuffWatchUnlocked() return buffWatch.unlocked end
+function HL:SetBuffWatchUnlocked(state) buffWatch.setUnlocked(state) end
+function HL:ResetBuffWatchPosition() buffWatch.resetPosition() end
+
 function HL:UpdateWellFed() wellFed.update() end
 function HL:IsWellFedUnlocked() return wellFed.unlocked end
 function HL:SetWellFedUnlocked(state) wellFed.setUnlocked(state) end
@@ -301,6 +400,7 @@ function HL:ResetCampfirePosition() campfire.resetPosition() end
 local QOL_DEFAULTS = {
     wellFedReminder = false,
     campfireReminder = false,
+    buffWatchReminder = false,
     targetButton = false,
     quietPvP = false,
     quietCities = false,
@@ -319,13 +419,15 @@ HL:On("PLAYER_LOGIN", function()
     end
     wellFed.create()
     campfire.create()
+    buffWatch.create()
     wellFed.update()
     campfire.update()
+    buffWatch.update()
 end)
 
 HL:On("UNIT_AURA", function(unit)
-    if unit == "player" then wellFed.update(); campfire.update() end
+    if unit == "player" then wellFed.update(); campfire.update(); buffWatch.update() end
 end)
 for _, ev in ipairs({ "PLAYER_ENTERING_WORLD", "PLAYER_REGEN_ENABLED", "PLAYER_DEAD", "PLAYER_ALIVE", "PLAYER_UNGHOST" }) do
-    HL:On(ev, function() wellFed.update(); campfire.update() end)
+    HL:On(ev, function() wellFed.update(); campfire.update(); buffWatch.update() end)
 end
