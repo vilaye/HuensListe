@@ -1,7 +1,8 @@
 -- Huens Liste: quality-of-life features
 --   Well Fed reminder: movable on-screen warning while you have no food buff
 --   Campfire reminder: the same for the campfire buff / Boosted Rest debuff
---   Weapon imbue reminder: Windfury Weapon, poisons etc. (temporary weapon enchants)
+--   Weapon imbue reminder: Windfury Weapon, poisons etc. (temporary weapon enchants),
+--     with click-to-apply for the imbue / poison chosen per hand
 --   Own buff reminder: the same for buffs the player picked (e.g. Find Minerals)
 local _, HL = ...
 
@@ -250,6 +251,120 @@ function HL:MissingWeaponImbues()
     return missing
 end
 
+---------------------------------------------------------------------------
+-- Click to apply: the imbue / poison chosen for each hand
+---------------------------------------------------------------------------
+-- settings.imbue = { main = { kind = "item" | "spell", name, id, icon }, off = {...} }
+local SHAMAN_IMBUES = { "Windfury Weapon", "Flametongue Weapon", "Rockbiter Weapon", "Frostbrand Weapon",
+    "Earthliving Weapon" }
+-- words that mark an item as something you put on a weapon (sorted first in the picker)
+local IMBUE_WORDS = { "poison", "stone", "oil", "gift", "wetzstein", "öl" }
+local CONSUMABLE_CLASS = 0
+
+function HL:ImbueConfig()
+    local s = self.settings
+    if type(s.imbue) ~= "table" then s.imbue = {} end
+    return s.imbue
+end
+
+local function spellInfo(nameOrId)
+    if C_Spell and C_Spell.GetSpellInfo then
+        local ok, info = pcall(C_Spell.GetSpellInfo, nameOrId)
+        if ok and type(info) == "table" and info.name then
+            return { kind = "spell", name = info.name, id = info.spellID, icon = info.iconID }
+        end
+    end
+end
+
+local function itemCount(id)
+    local get = (C_Item and C_Item.GetItemCount) or GetItemCount
+    if not get or not id then return 0 end
+    local ok, n = pcall(get, id)
+    return (ok and type(n) == "number") and n or 0
+end
+
+-- Everything that could go on a weapon: known shaman imbues, then usable consumables
+-- from the bags (poisons, stones and oils first)
+function HL:ImbueCandidates()
+    local list, seen = {}, {}
+    for _, name in ipairs(SHAMAN_IMBUES) do
+        local sp = spellInfo(name)
+        if sp and not seen["s" .. tostring(sp.id)] then
+            seen["s" .. tostring(sp.id)] = true
+            list[#list + 1] = sp
+        end
+    end
+    local likely, others = {}, {}
+    if C_Container and C_Container.GetContainerNumSlots then
+        local getInstant = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
+        local getSpell = (C_Item and C_Item.GetItemSpell) or GetItemSpell
+        local getName = (C_Item and C_Item.GetItemNameByID) or function(id) return (GetItemInfo(id)) end
+        for bag = 0, 5 do
+            local okN, slots = pcall(C_Container.GetContainerNumSlots, bag)
+            for slot = 1, (okN and tonumber(slots)) or 0 do
+                local okI, info = pcall(C_Container.GetContainerItemInfo, bag, slot)
+                local id = okI and type(info) == "table" and info.itemID
+                if id and not seen["i" .. id] then
+                    seen["i" .. id] = true
+                    local okC, _, _, _, _, icon, classID = pcall(getInstant, id)
+                    local okS, useSpell = pcall(getSpell, id)
+                    local okNm, name = pcall(getName, id)
+                    if okC and classID == CONSUMABLE_CLASS and okS and useSpell and okNm and type(name) == "string" then
+                        local entry = { kind = "item", name = name, id = id, icon = info.iconFileID or icon }
+                        local lower, hit = name:lower(), false
+                        for _, w in ipairs(IMBUE_WORDS) do
+                            if lower:find(w, 1, true) then hit = true break end
+                        end
+                        if hit then likely[#likely + 1] = entry else others[#others + 1] = entry end
+                    end
+                end
+            end
+        end
+    end
+    for _, e in ipairs(likely) do list[#list + 1] = e end
+    for _, e in ipairs(others) do list[#list + 1] = e end
+    return list
+end
+
+local function sameImbue(a, b)
+    return a and b and a.kind == b.kind and (a.id == b.id or (a.name and b.name and a.name:lower() == b.name:lower()))
+end
+
+function HL:IsImbueFor(hand, entry) return sameImbue(self:ImbueConfig()[hand], entry) and true or false end
+
+-- Set the imbue for "main" / "off"; the same entry again clears it. Returns true if set.
+function HL:SetImbue(hand, entry)
+    if hand ~= "main" and hand ~= "off" then return end
+    local cfg = self:ImbueConfig()
+    if not entry or sameImbue(cfg[hand], entry) then
+        cfg[hand] = nil
+    else
+        cfg[hand] = { kind = entry.kind, name = entry.name, id = entry.id, icon = entry.icon }
+    end
+    self:UpdateWeaponImbue()
+    return cfg[hand] ~= nil
+end
+
+-- /hl imbue main Instant Poison: a known spell with that name, else an item
+function HL:SetImbueByName(hand, name)
+    if type(name) ~= "string" or name == "" then return self:SetImbue(hand, nil) end
+    local entry = spellInfo(name)
+    if not entry then
+        for _, c in ipairs(self:ImbueCandidates()) do
+            if c.name:lower() == name:lower() then entry = c break end
+        end
+    end
+    entry = entry or { kind = "item", name = name }
+    self:ImbueConfig()[hand] = nil
+    return self:SetImbue(hand, entry)
+end
+
+function HL:ImbueText()
+    local cfg = self:ImbueConfig()
+    return ("main hand: %s, off hand: %s"):format(cfg.main and cfg.main.name or "nothing chosen",
+        cfg.off and cfg.off.name or "nothing chosen")
+end
+
 -- /hl buffs: list your buffs so we can see how the game names them
 function HL:PrintBuffs()
     if not (C_UnitAuras and C_UnitAuras.GetAuraDataByIndex) then return end
@@ -310,6 +425,7 @@ local function newReminder(opts)
             self:StopMovingOrSizing()
             local point, _, relPoint, x, y = self:GetPoint()
             HL.settings[opts.posKey] = { point, relPoint, x, y }
+            if opts.after then opts.after() end
         end)
 
         frame.bg = frame:CreateTexture(nil, "BACKGROUND")
@@ -340,7 +456,11 @@ local function newReminder(opts)
 
         applyPosition()
         frame:Hide()
+        if opts.onCreate then opts.onCreate(frame) end
     end
+
+    function r.frame() return frame end
+    function r.shown() return frame and frame:IsShown() and not r.unlocked or false end
 
     local function setVisible(show)
         if show then
@@ -351,7 +471,7 @@ local function newReminder(opts)
         end
     end
 
-    function r.update()
+    local function updateInner()
         if not frame or not HL.settings then return end
         frame.icon:SetTexture(opts.icon())
 
@@ -374,6 +494,11 @@ local function newReminder(opts)
         setVisible(not has)
     end
 
+    function r.update()
+        updateInner()
+        if frame and opts.after then opts.after() end
+    end
+
     function r.setUnlocked(state)
         r.unlocked = state and true or false
         r.update()
@@ -382,6 +507,7 @@ local function newReminder(opts)
     function r.resetPosition()
         HL.settings[opts.posKey] = nil
         if frame then applyPosition() end
+        if frame and opts.after then opts.after() end
     end
 
     return r
@@ -425,7 +551,101 @@ local buffWatch = newReminder({
 -- Weapon imbues: names the hand(s) without one
 local WEAPON_ICON = "Interface\\Icons\\INV_Sword_04"
 local missingHands = {}
-local weaponImbue = newReminder({
+local weaponImbue
+
+-- The click part is a secure button laid over the text. The game doesn't let addons
+-- show, hide, move or change such a button in combat, so it lives in a holder that
+-- the game itself hides in combat, and everything else is done out of combat only.
+local imbueHolder, imbueButton, imbuePending
+local HAND_SLOT = { ["main hand"] = SLOT_MAINHAND, ["off hand"] = SLOT_OFFHAND }
+local HAND_KEY = { ["main hand"] = "main", ["off hand"] = "off" }
+
+local function inCombat() return InCombatLockdown and InCombatLockdown() and true or false end
+
+local function createImbueButton()
+    imbueHolder = CreateFrame("Frame", nil, UIParent, "SecureHandlerStateTemplate")
+    imbueHolder:SetAllPoints(UIParent)
+    if RegisterStateDriver then RegisterStateDriver(imbueHolder, "visibility", "[combat] hide; show") end
+    imbueButton = CreateFrame("Button", "HuensListeImbueButton", imbueHolder, "SecureActionButtonTemplate")
+    imbueButton:SetFrameStrata("MEDIUM")
+    imbueButton:SetFrameLevel(20)
+    imbueButton:RegisterForClicks("AnyUp", "AnyDown")
+    local hl = imbueButton:CreateTexture(nil, "HIGHLIGHT")
+    hl:SetAllPoints()
+    hl:SetColorTexture(1, 1, 1, 0.10)
+    imbueButton:Hide()
+end
+
+-- what a click would do for that hand: entry, or nil plus the reason
+local function imbueAction(hand)
+    local entry = HL:ImbueConfig()[HAND_KEY[hand]]
+    if not entry then return nil end
+    if entry.kind == "item" and entry.id and itemCount(entry.id) == 0 then
+        return nil, "no " .. entry.name .. " in your bags"
+    end
+    return entry
+end
+
+local function setClick(n, hand, entry)
+    local sfx = tostring(n)
+    if not entry then
+        imbueButton:SetAttribute("type" .. sfx, nil)
+        return
+    end
+    imbueButton:SetAttribute("type" .. sfx, entry.kind)
+    if entry.kind == "spell" then
+        imbueButton:SetAttribute("spell" .. sfx, entry.name)
+        imbueButton:SetAttribute("target-slot" .. sfx, nil)
+    else
+        imbueButton:SetAttribute("item" .. sfx, entry.name or ("item:" .. tostring(entry.id)))
+        imbueButton:SetAttribute("target-slot" .. sfx, HAND_SLOT[hand])
+    end
+end
+
+-- Left click: first missing hand with a chosen imbue. Right click: the second one.
+local function updateImbueButton()
+    if not imbueButton or not weaponImbue then return end
+    local frame = weaponImbue.frame()
+    if not frame then return end
+
+    local clicks, problems = {}, {}
+    if weaponImbue.shown() then
+        for _, hand in ipairs(missingHands) do
+            local entry, why = imbueAction(hand)
+            if entry then clicks[#clicks + 1] = { hand = hand, entry = entry }
+            elseif why then problems[#problems + 1] = why end
+        end
+    end
+
+    -- hint under the text (plain text, fine in combat)
+    local hint
+    if weaponImbue.unlocked then
+        hint = "Drag to move – click \"Lock\" in /hl when done"
+    elseif #clicks > 0 then
+        hint = "Left-click: " .. clicks[1].entry.name .. " (" .. clicks[1].hand .. ")"
+        if clicks[2] then hint = hint .. "  ·  Right-click: " .. clicks[2].entry.name .. " (" .. clicks[2].hand .. ")" end
+        if inCombat() then hint = "Click to apply after combat" end
+    elseif #problems > 0 then
+        hint = problems[1]:sub(1, 1):upper() .. problems[1]:sub(2)
+    end
+    frame.hint:SetText(hint or "")
+    frame.hint:SetShown(hint ~= nil and (weaponImbue.unlocked or weaponImbue.shown()))
+
+    if inCombat() then imbuePending = true return end
+    imbuePending = false
+    if #clicks == 0 then imbueButton:Hide() return end
+
+    local x, y = frame:GetCenter()
+    if not x or not y then imbueButton:Hide() return end
+    imbueButton:ClearAllPoints()
+    imbueButton:SetSize(frame:GetWidth(), frame:GetHeight())
+    imbueButton:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x, y)
+    setClick(1, clicks[1].hand, clicks[1].entry)
+    setClick(2, clicks[2] and clicks[2].hand, clicks[2] and clicks[2].entry)
+    imbueButton:Show()
+end
+
+weaponImbue = newReminder({
     frameName = "HuensListeWeaponFrame", posKey = "weaponPos", enabledKey = "weaponReminder",
     defaultY = 30, width = 480,
     text = function()
@@ -444,6 +664,8 @@ local weaponImbue = newReminder({
         missingHands = missing
         return #missing == 0
     end,
+    onCreate = createImbueButton,
+    after = updateImbueButton,
 })
 
 function HL:UpdateWeaponImbue() weaponImbue.update() end
@@ -511,3 +733,6 @@ HL:On("UNIT_INVENTORY_CHANGED", function(unit)
     if unit == "player" then weaponImbue.update() end
 end)
 HL:On("PLAYER_EQUIPMENT_CHANGED", function() weaponImbue.update() end)
+-- bought or used up the poison; combat started (the click part is hidden by the game)
+HL:On("BAG_UPDATE_DELAYED", function() weaponImbue.update() end)
+HL:On("PLAYER_REGEN_DISABLED", function() weaponImbue.update() end)

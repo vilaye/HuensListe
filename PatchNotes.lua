@@ -3,6 +3,9 @@
 local _, HL = ...
 
 HL.PATCH_NOTES = {
+    { version = "1.10.0", notes = {
+        "Weapon imbue reminder: choose a poison or imbue per hand, then click the reminder text to apply it (out of combat)",
+    } },
     { version = "1.9.0", notes = {
         "Weapon imbue reminder: Windfury Weapon, poisons, stones and oils (Quality of Life, off by default)",
     } },

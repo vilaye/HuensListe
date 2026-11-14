@@ -556,12 +556,13 @@ function HL:BuildQoLPage(parent)
         function(v) HL:SetBuffWatchUnlocked(v) end,
         function() HL:ResetBuffWatchPosition() end)
 
-    reminderRow(-156, "Remind me when my weapon has no imbue or poison", "weaponReminder",
+    reminderRow(-156, "Remind me when a weapon has no imbue", "weaponReminder",
         function() HL:UpdateWeaponImbue() end,
         function() return HL:IsWeaponImbueUnlocked() end,
         function(v) HL:SetWeaponImbueUnlocked(v) end,
         function() HL:ResetWeaponImbuePosition() end)
 
+    local imbuePicker -- created further down; the two pickers close each other
     -- Which buffs to watch: picked from the buffs you have right now
     local chooseBtn = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
     chooseBtn:SetSize(96, 22)
@@ -642,7 +643,97 @@ function HL:BuildQoLPage(parent)
         picker:SetHeight(46 + shown * 18)
     end
     chooseBtn:SetScript("OnClick", function()
+        imbuePicker:Hide()
         if picker:IsShown() then picker:Hide() else refreshPicker(); picker:Show() end
+    end)
+
+    -- Click to apply: which imbue / poison goes on which hand
+    local imbueBtn = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+    imbueBtn:SetSize(96, 22)
+    imbueBtn:SetPoint("TOPLEFT", 298, -157)
+    imbueBtn:SetText("Choose imbue")
+
+    imbuePicker = CreateFrame("Frame", nil, page, "BackdropTemplate")
+    imbuePicker:SetSize(300, 60)
+    imbuePicker:SetPoint("TOPLEFT", imbueBtn, "BOTTOMLEFT", 0, -2)
+    imbuePicker:SetFrameStrata("DIALOG")
+    imbuePicker:EnableMouse(true)
+    if imbuePicker.SetBackdrop then
+        imbuePicker:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            edgeSize = 12, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
+        imbuePicker:SetBackdropColor(0.05, 0.05, 0.05, 0.97)
+        imbuePicker:SetBackdropBorderColor(0.6, 0.6, 0.6)
+    end
+    imbuePicker:Hide()
+    imbuePicker.title = imbuePicker:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    imbuePicker.title:SetPoint("TOPLEFT", 10, -8)
+    imbuePicker.title:SetWidth(280)
+    imbuePicker.title:SetJustifyH("LEFT")
+    imbuePicker.rows = {}
+
+    local MAX_IMBUE = 12
+    local function refreshImbuePicker()
+        local cfg = HL:ImbueConfig()
+        local items = {}
+        -- chosen ones first, so they can be removed even when the bags are empty
+        for _, hand in ipairs({ "main", "off" }) do
+            local e = cfg[hand]
+            if e then
+                local dup = false
+                for _, it in ipairs(items) do if it.kind == e.kind and it.name == e.name then dup = true end end
+                if not dup then items[#items + 1] = e end
+            end
+        end
+        for _, c in ipairs(HL:ImbueCandidates()) do
+            local dup = false
+            for _, it in ipairs(items) do
+                if it.kind == c.kind and (it.id == c.id or it.name == c.name) then dup = true end
+            end
+            if not dup then items[#items + 1] = c end
+        end
+        if #items == 0 then
+            imbuePicker.title:SetText("Nothing found. Put the poison in your bags,\nor type /hl imbue main Item Name")
+        else
+            imbuePicker.title:SetText("Left-click: main hand. Right-click: off hand.\nClicking the reminder text then applies it.")
+        end
+        local shown = math.min(#items, MAX_IMBUE)
+        for i = 1, shown do
+            local row = imbuePicker.rows[i]
+            if not row then
+                row = CreateFrame("Button", nil, imbuePicker)
+                row:SetSize(280, 18)
+                row:SetPoint("TOPLEFT", 10, -38 - (i - 1) * 18)
+                row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+                row.icon = row:CreateTexture(nil, "ARTWORK")
+                row.icon:SetSize(16, 16)
+                row.icon:SetPoint("LEFT", 0, 0)
+                row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+                row.text:SetPoint("LEFT", 20, 0)
+                row.text:SetWidth(258)
+                row.text:SetJustifyH("LEFT")
+                if row.text.SetWordWrap then row.text:SetWordWrap(false) end
+                local hl = row:CreateTexture(nil, "HIGHLIGHT")
+                hl:SetAllPoints()
+                hl:SetColorTexture(1, 1, 1, 0.12)
+                imbuePicker.rows[i] = row
+            end
+            local item = items[i]
+            local tags = (HL:IsImbueFor("main", item) and "|cff40ff40[main]|r " or "")
+                .. (HL:IsImbueFor("off", item) and "|cff40ff40[off]|r " or "")
+            row.icon:SetTexture(item.icon)
+            row.text:SetText(tags .. item.name)
+            row:SetScript("OnClick", function(_, mouseButton)
+                HL:SetImbue(mouseButton == "RightButton" and "off" or "main", item)
+                refreshImbuePicker()
+            end)
+            row:Show()
+        end
+        for i = shown + 1, #imbuePicker.rows do imbuePicker.rows[i]:Hide() end
+        imbuePicker:SetHeight(46 + shown * 18)
+    end
+    imbueBtn:SetScript("OnClick", function()
+        picker:Hide()
+        if imbuePicker:IsShown() then imbuePicker:Hide() else refreshImbuePicker(); imbuePicker:Show() end
     end)
 
     -- KOS target button
@@ -692,6 +783,7 @@ function HL:BuildQoLPage(parent)
         if HL:IsBuffWatchUnlocked() then HL:SetBuffWatchUnlocked(false) end
         if HL:IsWeaponImbueUnlocked() then HL:SetWeaponImbueUnlocked(false) end
         picker:Hide()
+        imbuePicker:Hide()
     end)
     return page
 end
@@ -1249,6 +1341,7 @@ local HELP = {
     "|cffffff00/hl wellfed [on/off]|r – Well Fed reminder (move it in the Quality of Life tab)",
     "|cffffff00/hl campfire [on/off]|r – campfire buff reminder (move it in the Quality of Life tab)",
     "|cffffff00/hl weapon [on/off]|r – reminder when your weapon has no imbue or poison",
+    "|cffffff00/hl imbue main Name|r / |cffffff00off Name|r – what a click on that reminder applies (|cffffff00clear|r to forget)",
     "|cffffff00/hl remind [on/off]|r – reminder for buffs you chose (QoL tab > Choose buffs)",
     "|cffffff00/hl remind add Buff Name|r – watch a buff; |cffffff00del Buff Name|r, |cffffff00clear|r, |cffffff00list|r",
     "|cffffff00/hl buffs|r – list your buffs (troubleshooting for the reminders)",
@@ -1379,6 +1472,15 @@ SlashCmdList.HUENSLISTE = function(msg)
             toggle("campfireReminder", arg, "Campfire reminder")
             HL:UpdateCampfire()
         end
+    elseif cmd == "imbue" then
+        local sub, name = (rest or ""):match("^(%S*)%s*(.-)%s*$")
+        sub = (sub or ""):lower()
+        if sub == "main" or sub == "off" then
+            HL:SetImbueByName(sub, name)
+        elseif sub == "clear" then
+            HL:SetImbue("main", nil); HL:SetImbue("off", nil)
+        end
+        HL:Print("Click to apply – " .. HL:ImbueText())
     elseif cmd == "weapon" then
         toggle("weaponReminder", arg, "Weapon imbue reminder")
         HL:UpdateWeaponImbue()

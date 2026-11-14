@@ -1,5 +1,8 @@
 # Huens Liste
 
+## v1.10.0
+- Click to apply: in the Quality of Life tab, "Choose imbue" lists your known shaman imbues and the poisons, stones and oils in your bags. Left-click one for the main hand, right-click for the off hand. When the weapon reminder shows, left-click the text to apply the first missing one and right-click for the second. The line under the text says what a click does, or that the item isn't in your bags. Out of combat only: the game doesn't allow addons to offer such a button in combat. Also `/hl imbue main Name`, `/hl imbue off Name`, `/hl imbue clear`.
+
 ## v1.9.0
 - Weapon imbue reminder (Quality of Life tab, off by default): a movable "No weapon imbue: main hand + off hand" text while a weapon you hold has no temporary enchant (shaman imbues like Windfury Weapon, rogue poisons, sharpening stones, oils). The off hand only counts when it holds a weapon, so shields and off-hand items are ignored, as are fishing poles. `/hl weapon [on/off]`. `/hl buffs` also prints the weapon imbue state.
 
