@@ -3,6 +3,9 @@
 local _, HL = ...
 
 HL.PATCH_NOTES = {
+    { version = "1.7.1", notes = {
+        "Campfire reminder: the Boosted Rest debuff (extra experience) counts too",
+    } },
     { version = "1.7.0", notes = {
         "New Log tab: recent kills, deaths and sightings (/hl log)",
         "Sync only with guild members by default (Users tab, /hl trust)",

@@ -1,5 +1,8 @@
 # Huens Liste
 
+## v1.7.1
+- Campfire reminder: taking the extra experience gives the Boosted Rest debuff (spell 1229451) instead of the buff. That now counts too, and the text is "No campfire or Boosted Rest buff!".
+
 ## v1.7.0
 - New "Log" tab (`/hl log`): recent KOS kills (red) and sightings (yellow), newest first, with who, where and when. Filters for kills/sightings. Kills are shared with friends; sightings are your own plus the ones friends reported while you were online (kept 14 days).
 - Guild-only sync (on by default): sync messages are only accepted from members of your guild, plus your private sync channel. Strangers in a pickup group can no longer change your lists. Toggle in the Users tab or with `/hl trust`. If you're not in a guild, everything is accepted as before.

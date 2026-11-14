@@ -1,6 +1,6 @@
 -- Huens Liste: quality-of-life features
 --   Well Fed reminder: movable on-screen warning while you have no food buff
---   Campfire reminder: the same for the campfire buff (spell 1229741)
+--   Campfire reminder: the same for the campfire buff / Boosted Rest debuff
 local _, HL = ...
 
 ---------------------------------------------------------------------------
@@ -52,7 +52,24 @@ end
 -- The campfire buff is spell 1229741, so the reminder works without any setup.
 -- Extra buffs can be added by name with /hl campfire set Buff Name:
 -- settings.campBuffs = { { n = name, id = spellId, icon = icon }, ... }
+-- Taking the tent's extra rested XP gives no buff but the "Boosted Rest" debuff
+-- (spell 1229451); that counts as being covered too.
 local CAMP_SPELL_ID = 1229741
+local BOOSTED_REST_ID = 1229451
+
+-- true / false, nil while the game hides aura data
+local function hasBoostedRest()
+    if not (C_UnitAuras and C_UnitAuras.GetAuraDataByIndex) then return nil end
+    for i = 1, 255 do
+        local ok, aura = pcall(C_UnitAuras.GetAuraDataByIndex, "player", i, "HARMFUL")
+        if not ok then return nil end
+        if not aura then return false end
+        local id = aura.spellId
+        if HL.IsSecret(id) then return nil end
+        if id == BOOSTED_REST_ID then return true end
+    end
+    return false
+end
 local CAMP_ICON = "Interface\\Icons\\Spell_Fire_Fire"
 
 local function campIcon()
@@ -118,13 +135,18 @@ function HL:CampBuffText()
     return "spell " .. CAMP_SPELL_ID .. ", " .. table.concat(names, ", ")
 end
 
--- true / false (the campfire buff or any extra watched buff), nil if aura data is hidden
+-- true / false (the campfire buff, the Boosted Rest debuff or any extra watched buff),
+-- nil if aura data is hidden
 function HL:HasCampBuff()
     local buffs = self:PlayerBuffs()
-    if not buffs then return nil end
-    for _, a in ipairs(buffs) do
-        if self:IsCampBuff(a.name, a.spellId) then return true end
+    if buffs then
+        for _, a in ipairs(buffs) do
+            if self:IsCampBuff(a.name, a.spellId) then return true end
+        end
     end
+    local rest = hasBoostedRest()
+    if rest then return true end
+    if not buffs or rest == nil then return nil end
     return false
 end
 
@@ -143,6 +165,8 @@ function HL:PrintBuffs()
                 self:IsCampBuff(aura.name, aura.spellId) and ", |cff40ff40= campfire buff|r" or ""))
         end
     end
+    local rest = hasBoostedRest()
+    print("  Boosted Rest debuff: " .. (rest == nil and "(hidden by the game right now)" or rest and "|cff40ff40yes|r" or "no"))
 end
 
 ---------------------------------------------------------------------------
@@ -257,7 +281,7 @@ local wellFed = newReminder({
 
 local campfire = newReminder({
     frameName = "HuensListeCampfireFrame", posKey = "campfirePos", enabledKey = "campfireReminder",
-    defaultY = 130, width = 400, text = "Campfire buff is missing!",
+    defaultY = 130, width = 480, text = "No campfire or Boosted Rest buff!",
     icon = campIcon,
     has = function() return HL:HasCampBuff() end,
 })

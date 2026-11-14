@@ -544,7 +544,7 @@ function HL:BuildQoLPage(parent)
         function() return HL:IsWellFedUnlocked() end,
         function(v) HL:SetWellFedUnlocked(v) end,
         function() HL:ResetWellFedPosition() end)
-    reminderRow(-114, "Remind me when my campfire buff is missing", "campfireReminder",
+    reminderRow(-114, "Remind me when I have no campfire or Boosted Rest buff", "campfireReminder",
         function() HL:UpdateCampfire() end,
         function() return HL:IsCampfireUnlocked() end,
         function(v) HL:SetCampfireUnlocked(v) end,
@@ -554,7 +554,7 @@ function HL:BuildQoLPage(parent)
     desc:SetPoint("TOPLEFT", 44, -142)
     desc:SetWidth(520)
     desc:SetJustifyH("LEFT")
-    desc:SetText("Shows \"You are not Well Fed!\" / \"Campfire buff is missing!\" on screen while the buff is gone.")
+    desc:SetText("Shows \"You are not Well Fed!\" / \"No campfire or Boosted Rest buff!\" on screen while it is gone.")
 
     -- KOS target button
     local tsection = page:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
