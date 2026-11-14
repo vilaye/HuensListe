@@ -1,6 +1,7 @@
 -- Huens Liste: quality-of-life features
 --   Well Fed reminder: movable on-screen warning while you have no food buff
 --   Campfire reminder: the same for the campfire buff / Boosted Rest debuff
+--   Weapon imbue reminder: Windfury Weapon, poisons etc. (temporary weapon enchants)
 --   Own buff reminder: the same for buffs the player picked (e.g. Find Minerals)
 local _, HL = ...
 
@@ -218,6 +219,37 @@ function HL:MissingWatchBuffs()
     return missing
 end
 
+---------------------------------------------------------------------------
+-- Weapon imbues: Windfury Weapon, poisons, sharpening stones, oils ...
+---------------------------------------------------------------------------
+-- These are temporary weapon enchants, not buffs, so they never show up in the
+-- aura list. The game reports them through GetWeaponEnchantInfo().
+local SLOT_MAINHAND, SLOT_OFFHAND = 16, 17
+local WEAPON_CLASS = 2 -- Enum.ItemClass.Weapon
+local FISHING_POLE = 20 -- weapon subclass
+
+-- true if that slot holds a real weapon (not a shield, an off-hand item or a fishing pole)
+local function slotHasWeapon(slot)
+    local ok, id = pcall(GetInventoryItemID, "player", slot)
+    if not ok or not id or HL.IsSecret(id) then return false end
+    local getInfo = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
+    if not getInfo then return true end
+    local ok2, _, _, _, _, _, classID, subclassID = pcall(getInfo, id)
+    if not ok2 then return true end
+    return classID == WEAPON_CLASS and subclassID ~= FISHING_POLE
+end
+
+-- List of hands without an imbue ({ "main hand", "off hand" }); nil if the game hides it
+function HL:MissingWeaponImbues()
+    if not GetWeaponEnchantInfo then return nil end
+    local ok, hasMain, _, _, _, hasOff = pcall(GetWeaponEnchantInfo)
+    if not ok or HL.IsSecret(hasMain) or HL.IsSecret(hasOff) then return nil end
+    local missing = {}
+    if not hasMain and slotHasWeapon(SLOT_MAINHAND) then missing[#missing + 1] = "main hand" end
+    if not hasOff and slotHasWeapon(SLOT_OFFHAND) then missing[#missing + 1] = "off hand" end
+    return missing
+end
+
 -- /hl buffs: list your buffs so we can see how the game names them
 function HL:PrintBuffs()
     if not (C_UnitAuras and C_UnitAuras.GetAuraDataByIndex) then return end
@@ -232,6 +264,16 @@ function HL:PrintBuffs()
                 tostring(aura.spellId), isWellFedAura(aura.name, aura.icon) and ", |cff40ff40= Well Fed|r" or "",
                 (self:IsCampBuff(aura.name, aura.spellId) and ", |cff40ff40= campfire buff|r" or "")
                 .. (self:IsWatchedBuff(aura.name, aura.spellId) and ", |cff40ff40= watched|r" or "")))
+        end
+    end
+    if GetWeaponEnchantInfo then
+        local ok, hasMain, _, _, mainId, hasOff, _, _, offId = pcall(GetWeaponEnchantInfo)
+        if not ok or HL.IsSecret(hasMain) or HL.IsSecret(hasOff) then
+            print("  Weapon imbues: (hidden by the game right now)")
+        else
+            print(("  Weapon imbues: main hand %s, off hand %s"):format(
+                hasMain and ("|cff40ff40yes|r (enchant " .. tostring(mainId) .. ")") or "no",
+                hasOff and ("|cff40ff40yes|r (enchant " .. tostring(offId) .. ")") or "no"))
         end
     end
     local rest = hasBoostedRest()
@@ -380,6 +422,35 @@ local buffWatch = newReminder({
     end,
 })
 
+-- Weapon imbues: names the hand(s) without one
+local WEAPON_ICON = "Interface\\Icons\\INV_Sword_04"
+local missingHands = {}
+local weaponImbue = newReminder({
+    frameName = "HuensListeWeaponFrame", posKey = "weaponPos", enabledKey = "weaponReminder",
+    defaultY = 30, width = 480,
+    text = function()
+        if #missingHands == 0 then return "No weapon imbue!" end -- move mode
+        return "No weapon imbue: " .. table.concat(missingHands, " + ")
+    end,
+    icon = function()
+        local slot = (missingHands[1] == "off hand") and SLOT_OFFHAND or SLOT_MAINHAND
+        local ok, tex = pcall(GetInventoryItemTexture, "player", slot)
+        if ok and tex and not HL.IsSecret(tex) then return tex end
+        return WEAPON_ICON
+    end,
+    has = function()
+        local missing = HL:MissingWeaponImbues()
+        if not missing then return nil end
+        missingHands = missing
+        return #missing == 0
+    end,
+})
+
+function HL:UpdateWeaponImbue() weaponImbue.update() end
+function HL:IsWeaponImbueUnlocked() return weaponImbue.unlocked end
+function HL:SetWeaponImbueUnlocked(state) weaponImbue.setUnlocked(state) end
+function HL:ResetWeaponImbuePosition() weaponImbue.resetPosition() end
+
 function HL:UpdateBuffWatch() buffWatch.update() end
 function HL:IsBuffWatchUnlocked() return buffWatch.unlocked end
 function HL:SetBuffWatchUnlocked(state) buffWatch.setUnlocked(state) end
@@ -401,6 +472,7 @@ local QOL_DEFAULTS = {
     wellFedReminder = false,
     campfireReminder = false,
     buffWatchReminder = false,
+    weaponReminder = false,
     targetButton = false,
     quietPvP = false,
     quietCities = false,
@@ -420,14 +492,22 @@ HL:On("PLAYER_LOGIN", function()
     wellFed.create()
     campfire.create()
     buffWatch.create()
+    weaponImbue.create()
     wellFed.update()
     campfire.update()
     buffWatch.update()
+    weaponImbue.update()
 end)
 
 HL:On("UNIT_AURA", function(unit)
     if unit == "player" then wellFed.update(); campfire.update(); buffWatch.update() end
 end)
 for _, ev in ipairs({ "PLAYER_ENTERING_WORLD", "PLAYER_REGEN_ENABLED", "PLAYER_DEAD", "PLAYER_ALIVE", "PLAYER_UNGHOST" }) do
-    HL:On(ev, function() wellFed.update(); campfire.update(); buffWatch.update() end)
+    HL:On(ev, function() wellFed.update(); campfire.update(); buffWatch.update(); weaponImbue.update() end)
 end
+
+-- Weapon imbues change with UNIT_INVENTORY_CHANGED; swapping weapons also matters
+HL:On("UNIT_INVENTORY_CHANGED", function(unit)
+    if unit == "player" then weaponImbue.update() end
+end)
+HL:On("PLAYER_EQUIPMENT_CHANGED", function() weaponImbue.update() end)

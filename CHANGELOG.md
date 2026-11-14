@@ -1,5 +1,8 @@
 # Huens Liste
 
+## v1.9.0
+- Weapon imbue reminder (Quality of Life tab, off by default): a movable "No weapon imbue: main hand + off hand" text while a weapon you hold has no temporary enchant (shaman imbues like Windfury Weapon, rogue poisons, sharpening stones, oils). The off hand only counts when it holds a weapon, so shields and off-hand items are ignored, as are fishing poles. `/hl weapon [on/off]`. `/hl buffs` also prints the weapon imbue state.
+
 ## v1.8.0
 - Own buff reminders (Quality of Life tab, off by default): choose any buffs you always want up, for example Find Minerals, and a movable "Missing: Find Minerals" text shows while one of them is gone. "Choose buffs" lists your current buffs to click; `/hl remind add Buff Name` adds one by name without having it. Also `/hl remind [on/off]`, `del Buff Name`, `clear`, `list`.
 

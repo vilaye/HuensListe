@@ -544,22 +544,28 @@ function HL:BuildQoLPage(parent)
         function() return HL:IsWellFedUnlocked() end,
         function(v) HL:SetWellFedUnlocked(v) end,
         function() HL:ResetWellFedPosition() end)
-    reminderRow(-114, "Remind me when I have no campfire or Boosted Rest buff", "campfireReminder",
+    reminderRow(-112, "Remind me when I have no campfire or Boosted Rest buff", "campfireReminder",
         function() HL:UpdateCampfire() end,
         function() return HL:IsCampfireUnlocked() end,
         function(v) HL:SetCampfireUnlocked(v) end,
         function() HL:ResetCampfirePosition() end)
 
-    reminderRow(-138, "Remind me when a chosen buff is missing", "buffWatchReminder",
+    reminderRow(-134, "Remind me when a chosen buff is missing", "buffWatchReminder",
         function() HL:UpdateBuffWatch() end,
         function() return HL:IsBuffWatchUnlocked() end,
         function(v) HL:SetBuffWatchUnlocked(v) end,
         function() HL:ResetBuffWatchPosition() end)
 
+    reminderRow(-156, "Remind me when my weapon has no imbue or poison", "weaponReminder",
+        function() HL:UpdateWeaponImbue() end,
+        function() return HL:IsWeaponImbueUnlocked() end,
+        function(v) HL:SetWeaponImbueUnlocked(v) end,
+        function() HL:ResetWeaponImbuePosition() end)
+
     -- Which buffs to watch: picked from the buffs you have right now
     local chooseBtn = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
     chooseBtn:SetSize(96, 22)
-    chooseBtn:SetPoint("TOPLEFT", 298, -139)
+    chooseBtn:SetPoint("TOPLEFT", 298, -135)
     chooseBtn:SetText("Choose buffs")
 
     local picker = CreateFrame("Frame", nil, page, "BackdropTemplate")
@@ -684,6 +690,7 @@ function HL:BuildQoLPage(parent)
         if HL:IsWellFedUnlocked() then HL:SetWellFedUnlocked(false) end
         if HL:IsCampfireUnlocked() then HL:SetCampfireUnlocked(false) end
         if HL:IsBuffWatchUnlocked() then HL:SetBuffWatchUnlocked(false) end
+        if HL:IsWeaponImbueUnlocked() then HL:SetWeaponImbueUnlocked(false) end
         picker:Hide()
     end)
     return page
@@ -1241,6 +1248,7 @@ local HELP = {
     "|cffffff00/hl minimap [on/off]|r – show/hide the minimap button",
     "|cffffff00/hl wellfed [on/off]|r – Well Fed reminder (move it in the Quality of Life tab)",
     "|cffffff00/hl campfire [on/off]|r – campfire buff reminder (move it in the Quality of Life tab)",
+    "|cffffff00/hl weapon [on/off]|r – reminder when your weapon has no imbue or poison",
     "|cffffff00/hl remind [on/off]|r – reminder for buffs you chose (QoL tab > Choose buffs)",
     "|cffffff00/hl remind add Buff Name|r – watch a buff; |cffffff00del Buff Name|r, |cffffff00clear|r, |cffffff00list|r",
     "|cffffff00/hl buffs|r – list your buffs (troubleshooting for the reminders)",
@@ -1371,6 +1379,9 @@ SlashCmdList.HUENSLISTE = function(msg)
             toggle("campfireReminder", arg, "Campfire reminder")
             HL:UpdateCampfire()
         end
+    elseif cmd == "weapon" then
+        toggle("weaponReminder", arg, "Weapon imbue reminder")
+        HL:UpdateWeaponImbue()
     elseif cmd == "remind" then
         local sub, name = (rest or ""):match("^(%S*)%s*(.-)%s*$")
         sub = (sub or ""):lower()
