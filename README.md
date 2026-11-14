@@ -10,6 +10,9 @@ Getting ganked? Put the ganker on the list. Everyone in your group of friends ge
 - **Target nearby KOS:** key binding, macro or on-screen button that targets the KOS player you saw most recently
 - **Log:** recent kills, deaths and sightings in one tab, color-coded
 - **Search and sort** the lists; class and level of listed players; kills / deaths per KOS player
+- **Bounties** on KOS players, announced when someone claims them
+- **Hotspots:** per-zone view of where KOS players have been active
+- **Weekly kill board** and kill streak announcements
 - **Guild-only sync** by default, so strangers can't change your lists
 - **Kill counter:** honorable kills on KOS players are counted and shared; see who killed whom and who has the most KOS kills
 - **Nameplate marker:** a skull and "KILL ON SIGHT" above every listed player
@@ -49,7 +52,8 @@ Getting ganked? Put the ganker on the list. Everyone in your group of friends ge
 | `/hl buffs` | List your buffs (troubleshooting) |
 | `/hl offset <px>`, `/hl scale <0.5–2>` | Move/resize the nameplate skull |
 | `/hl export`, `/hl import` | Share the list by copy & paste |
-| `/hl log` | Recent kills and sightings |
+| `/hl log` | Recent kills, deaths and sightings; zone view |
+| `/hl bounty Firstname Lastname text` | Set a bounty on a KOS player (no text = remove) |
 | `/hl macro` | Create a "KOS Target" macro that targets the nearby KOS player |
 | `/hl notes` | Patch notes: what's new in each version |
 | `/hl debug` | Print sync traffic in chat (troubleshooting) |

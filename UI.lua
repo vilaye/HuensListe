@@ -55,6 +55,79 @@ StaticPopupDialogs["HUENSLISTE_NOTE"] = {
     preferredIndex = 3,
 }
 
+StaticPopupDialogs["HUENSLISTE_BOUNTY"] = {
+    text = "Bounty on %s\n(for example \"50g from Vila\" – leave empty to remove it):",
+    button1 = SAVE or ACCEPT,
+    button2 = CANCEL,
+    hasEditBox = true,
+    maxLetters = 40,
+    OnShow = function(self, data)
+        local eb = popupEditBox(self)
+        if eb and data then eb:SetText(data.r or ""); eb:HighlightText() end
+    end,
+    OnAccept = function(self, data)
+        local eb = popupEditBox(self)
+        if eb then HL:SetBounty(data.full, eb:GetText()) end
+    end,
+    EditBoxOnEnterPressed = function(self)
+        local p = self:GetParent()
+        HL:SetBounty(p.data.full, self:GetText())
+        p:Hide()
+    end,
+    EditBoxOnEscapePressed = function(self) self:GetParent():Hide() end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
+function HL:PromptBounty(full)
+    local e = self:Get(HL.NormalizeName(full or "") or "", "kos")
+    if not e then return end
+    local cur = self:Bounty(e.n)
+    StaticPopup_Show("HUENSLISTE_BOUNTY", HL.ColorName(HL.ShortName(e.n), "kos"), nil, { full = e.n, r = cur and cur.r or "" })
+end
+
+-- After a gank by someone who isn't listed yet (Kills.lua decides who)
+StaticPopupDialogs["HUENSLISTE_GANK"] = {
+    text = "%s was on you when you died.\nAdd to the KOS List? Note:",
+    button1 = ACCEPT,
+    button2 = CANCEL,
+    hasEditBox = true,
+    maxLetters = 80,
+    OnShow = function(self, data)
+        local eb = popupEditBox(self)
+        if eb and data then eb:SetText(data.r or ""); eb:HighlightText() end
+    end,
+    OnAccept = function(self, data)
+        local eb = popupEditBox(self)
+        HL:Add(data.full, eb and eb:GetText() or "", "kos", "enemy")
+    end,
+    OnCancel = function(_, data)
+        if data then HL.gankDeclined[HL.Key(data.full)] = true end
+    end,
+    EditBoxOnEnterPressed = function(self)
+        local p = self:GetParent()
+        HL:Add(p.data.full, self:GetText(), "kos", "enemy")
+        p:Hide()
+    end,
+    EditBoxOnEscapePressed = function(self)
+        local p = self:GetParent()
+        if p.data then HL.gankDeclined[HL.Key(p.data.full)] = true end
+        p:Hide()
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
+function HL:PromptGank(full)
+    local zone = HL.Clean(GetZoneText() or "", 60)
+    StaticPopup_Show("HUENSLISTE_GANK", HL.ColorName(HL.ShortName(full), "kos"), nil,
+        { full = full, r = "killed me" .. (zone ~= "" and (" in " .. zone) or "") })
+end
+
 function HL:PromptNote(full)
     local list, e = self:Find(HL.NormalizeName(full) or "")
     if not e then return end
@@ -134,7 +207,12 @@ local function getRow(page, i)
 
     r:EnableMouse(true)
     r:SetScript("OnMouseUp", function(self, button)
-        if button == "LeftButton" and self.full then HL:PromptNote(self.full) end
+        if not self.full then return end
+        if button == "LeftButton" then
+            HL:PromptNote(self.full)
+        elseif button == "RightButton" and list == "kos" then
+            HL:PromptBounty(self.full)
+        end
     end)
     r:SetScript("OnEnter", function(self)
         local e, s = self.entry, self.seenData
@@ -144,6 +222,8 @@ local function getRow(page, i)
         local info = HL:InfoText(e.n)
         if info then GameTooltip:AddLine("Level " .. info) end
         if e.r ~= "" then GameTooltip:AddLine(e.r, 1, 1, 1, true) end
+        local bounty = list == "kos" and HL:Bounty(e.n)
+        if bounty then GameTooltip:AddLine("Bounty: " .. bounty.r .. " (set by " .. HL.ShortName(bounty.b) .. ")", 1, 0.82, 0, true) end
         GameTooltip:AddLine("Added by " .. HL.ShortName(e.b) .. " on " .. date("%d.%m.%Y %H:%M", e.t), 0.7, 0.7, 0.7)
         if list == "kos" then
             local count, killers, last = HL:KillStats(e.n)
@@ -169,6 +249,7 @@ local function getRow(page, i)
         end
         GameTooltip:AddLine(" ")
         GameTooltip:AddLine("Click to edit the note", 0.4, 0.8, 1)
+        if list == "kos" then GameTooltip:AddLine("Right-click to set a bounty", 0.4, 0.8, 1) end
         GameTooltip:Show()
     end)
     r:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -196,8 +277,9 @@ local function refreshListPage(page)
             total = total + 1
             local match = true
             if filter and filter ~= "" then
+                local bounty = list == "kos" and HL:Bounty(e.n)
                 local hay = (HL.ShortName(e.n) .. " " .. e.r .. " " .. HL.ShortName(e.b) .. " "
-                    .. (HL:InfoText(e.n, true) or "")):lower()
+                    .. (HL:InfoText(e.n, true) or "") .. (bounty and (" bounty " .. bounty.r) or "")):lower()
                 match = hay:find(filter, 1, true) ~= nil
             end
             if match then
@@ -230,7 +312,8 @@ local function refreshListPage(page)
         local e, s = x.e, x.seen
         local r = getRow(page, i)
         r.full, r.entry, r.seenData = e.n, e, s
-        r.name:SetText(HL:ColoredName(e.n, list))
+        r.name:SetText(HL:ColoredName(e.n, list)
+            .. ((list == "kos" and HL:Bounty(e.n)) and " |TInterface\\MoneyFrame\\UI-GoldIcon:12:12:0:0|t" or ""))
         r.level:SetText(x.level > 0 and tostring(x.level) or "")
         r.reason:SetText(e.r)
         r.by:SetText(HL.ShortName(e.b))
@@ -303,9 +386,10 @@ local function getUserRow(i)
     r.dot = r:CreateTexture(nil, "ARTWORK")
     r.dot:SetSize(8, 8)
     r.dot:SetPoint("LEFT", 6, 0)
-    r.name = makeFS(r, 20, 180, "GameFontHighlight")
-    r.version = makeFS(r, 205, 105, "GameFontHighlightSmall")
-    r.kills = makeFS(r, 315, 55, "GameFontHighlight")
+    r.name = makeFS(r, 20, 150, "GameFontHighlight")
+    r.version = makeFS(r, 175, 95, "GameFontHighlightSmall")
+    r.week = makeFS(r, 275, 45, "GameFontHighlight")
+    r.kills = makeFS(r, 325, 45, "GameFontHighlight")
     r.status = makeFS(r, 375, 95, "GameFontDisableSmall")
     r.via = makeFS(r, 475, 65, "GameFontDisableSmall")
     userRows[i] = r
@@ -327,6 +411,9 @@ function HL:RefreshUsers()
     end)
 
     local scores = self:KillScores()
+    local weekScores = self:KillScores(HL.WeekStart())
+    local weekBest = 0
+    for _, n in pairs(weekScores) do if n > weekBest then weekBest = n end end
     local online, outdated = 0, 0
     for i, p in ipairs(list) do
         local r = getUserRow(i)
@@ -336,6 +423,9 @@ function HL:RefreshUsers()
         r.name:SetText(HL.ShortName(p.n) .. (p.me and " |cff888888(you)|r" or ""))
         local kills = scores[HL.Key(p.n or "")] or 0
         r.kills:SetText(kills > 0 and ("|cffff6060" .. kills .. "|r") or "|cff666666-|r")
+        local week = weekScores[HL.Key(p.n or "")] or 0
+        -- this week's leader in gold
+        r.week:SetText(week > 0 and ((week == weekBest and "|cffffd100" or "|cffff6060") .. week .. "|r") or "|cff666666-|r")
         if not p.v then
             r.version:SetText("|cff888888unknown|r")
         elseif HL.VersionNumber(p.v) < newest then
@@ -370,9 +460,9 @@ function HL:BuildUsersPage(parent)
     desc:SetPoint("TOPLEFT", 20, -58)
     desc:SetWidth(560)
     desc:SetJustifyH("LEFT")
-    desc:SetText("Everyone who synced with you in the last 30 days. Players on 1.3.0 or older only show up with their periodic sync (every 5 minutes).")
+    desc:SetText("Everyone who synced with you in the last 30 days. Week / Total = KOS kills this week (resets Monday) and all time; the week's leader is gold.")
 
-    local headers = { { "Name", 26 }, { "Version", 211 }, { "KOS Kills", 321 }, { "Status", 381 }, { "Via", 481 } }
+    local headers = { { "Name", 26 }, { "Version", 181 }, { "Week", 281 }, { "Total", 331 }, { "Status", 381 }, { "Via", 481 } }
     for _, h in ipairs(headers) do
         local fs = page:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         fs:SetPoint("TOPLEFT", h[2], -82)
@@ -477,6 +567,8 @@ function HL:BuildQoLPage(parent)
 
     makeCheck(page, "Quiet in battlegrounds and arenas", "quietPvP", { "TOPLEFT", 16, -314 })
     makeCheck(page, "Quiet in cities, inns and sanctuaries", "quietCities", { "TOPLEFT", 16, -338 })
+
+    makeCheck(page, "After a gank: offer to add my killer to the KOS List (not in battlegrounds)", "gankSuggest", { "TOPLEFT", 16, -362 })
 
     page:SetScript("OnShow", refreshMoveText)
     -- Leaving the window locks the reminder again
@@ -828,6 +920,9 @@ if Menu and Menu.ModifyMenu then
         root:CreateTitle("Huens Liste")
         if onList then
             root:CreateButton("Edit note", function() HL:PromptNote(full) end)
+            if onList == "kos" then
+                root:CreateButton(HL:Bounty(full) and "Edit bounty" or "Set bounty", function() HL:PromptBounty(full) end)
+            end
             root:CreateButton("Remove from the " .. HL.ListLabel(onList), function() HL:Remove(full, onList) end)
             local other = HL.OtherList(onList)
             if not ((other == "kos" and relation == "friendly") or (other == "avoid" and relation == "enemy")) then
@@ -868,6 +963,7 @@ local HELP = {
     "|cffffff00/hl macro|r – create a macro that targets the nearby KOS player",
     "|cffffff00/hl notes|r – patch notes: what's new in each version",
     "|cffffff00/hl note Firstname Lastname new note|r – change the note (or click the row in /hl)",
+    "|cffffff00/hl bounty Firstname Lastname text|r – set a bounty on a KOS player (no text = remove)",
     "|cffffff00/hl del Firstname Lastname|r – remove from either list (no name = target)",
     "|cffffff00/hl debug|r – print sync traffic in chat (for troubleshooting)",
     "|cffffff00/hl list|r – print both lists",
@@ -914,6 +1010,10 @@ SlashCmdList.HUENSLISTE = function(msg)
         HL:CreateTargetMacro()
     elseif cmd == "notes" or cmd == "patchnotes" or cmd == "changelog" then
         HL:ShowTab(HL.TAB_PATCH_NOTES)
+    elseif cmd == "bounty" then
+        local name, text = parseNameAndReason(rest)
+        if not name then HL:Print("Usage: /hl bounty Firstname Lastname 50g from me  (no text = remove)") return end
+        HL:SetBounty(name, text)
     elseif cmd == "note" then
         local name, note = parseNameAndReason(rest)
         if not name then HL:Print("Usage: /hl note Firstname Lastname new note") return end

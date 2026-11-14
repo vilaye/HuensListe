@@ -171,6 +171,7 @@ local QOL_DEFAULTS = {
     targetButton = false,
     quietPvP = false,
     quietCities = false,
+    gankSuggest = false,
 }
 
 HL:On("PLAYER_LOGIN", function()

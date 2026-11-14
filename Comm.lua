@@ -7,7 +7,8 @@
 --   R;0,3,7           "send me your entries in these buckets", whispered
 --   S;name;zone;sub   sighting, broadcast
 --   P;version / V;version   version ping / reply (Users tab)
--- The Swine List uses a/u/h/r, kill credits X/Y/Z/W and deaths K/L/M/N instead of A/U/H/R.
+-- The Swine List uses a/u/h/r, kill credits X/Y/Z/W, deaths K/L/M/N and bounties B/C/D/E
+-- instead of A/U/H/R.
 -- Sightings may carry class and level: S;name;zone;sub;CLASS;level
 local _, HL = ...
 local RS = HL.RS
@@ -108,6 +109,7 @@ local KINDS = {
     avoid = { A = "a", U = "u", H = "h", R = "r" },
     kills = { A = "X", U = "Y", H = "Z", R = "W" },
     deaths = { A = "K", U = "L", H = "M", R = "N" },
+    bounty = { A = "B", U = "C", H = "D", R = "E" },
 }
 local KIND_INFO = {} -- "a" -> { list = "avoid", base = "A" }
 for list, m in pairs(KINDS) do
@@ -214,6 +216,7 @@ end
 -- (name + password you set yourself) is always trusted. Without a guild there
 -- is nobody to check against, so everything is accepted as before.
 ---------------------------------------------------------------------------
+HL.bountyClaimed = {} -- [key] = GetTime() when we saw the bounty claimed
 local guildSeen, roster, rosterAt = {}, {}, 0
 
 local function refreshRoster()
@@ -384,14 +387,33 @@ HL:On("CHAT_MSG_ADDON", function(prefix, msg, channel, rawSender)
         end
         if #changed == 0 then return end
         HL:Fire()
-        if list == "kills" or list == "deaths" then
+        if list == "kills" or list == "deaths" or list == "bounty" then
             if base == "A" then
                 for _, rec in ipairs(changed) do
                     local where = rec.r ~= "" and (" in " .. rec.r) or ""
-                    if list == "kills" then
+                    if list == "bounty" then
+                        local who = HL.ShortName(rec.b ~= "" and rec.b or sender)
+                        local target = HL.ColorName(HL.ShortName(rec.n), "kos")
+                        if rec.d or rec.r == "" then
+                            -- a claimed bounty is removed by the killer: the kill line already said so
+                            local claimed = HL.bountyClaimed[HL.Key(rec.n)]
+                            if not claimed or GetTime() - claimed > 15 then
+                                HL:Print(who .. " removed the bounty on " .. target)
+                            end
+                        else
+                            HL:Print(("%s set a |cffffd100bounty|r on %s: %s"):format(who, target, rec.r))
+                        end
+                    elseif list == "kills" then
                         local count = HL:KillStats(rec.n)
+                        local bounty = HL:Bounty(rec.n)
                         HL:Print(("%s killed %s – KOS kill #%d%s"):format(HL.ShortName(rec.b),
                             HL.ColorName(HL.ShortName(rec.n), "kos"), count, where))
+                        if bounty then
+                            HL.bountyClaimed[HL.Key(rec.n)] = GetTime()
+                            HL:Print(("|cffffd100Bounty claimed|r by %s: %s (set by %s)"):format(HL.ShortName(rec.b),
+                                bounty.r, HL.ShortName(bounty.b)))
+                        end
+                        HL:AnnounceStreak(rec.b)
                     else
                         HL:Print(("|cffc070ff%s was killed by|r %s%s"):format(HL.ShortName(rec.b),
                             HL.ColorName(HL.ShortName(rec.n), "kos"), where))

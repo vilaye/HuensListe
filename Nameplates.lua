@@ -27,6 +27,11 @@ local function getOverlay(plate)
     o.text:SetShadowOffset(1, -1)
     o.text:SetText("KILL ON SIGHT")
 
+    o.bounty = o:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    o.bounty:SetPoint("BOTTOM", o.icon, "TOP", 0, 1)
+    o.bounty:SetTextColor(1, 0.82, 0)
+    o.bounty:SetShadowOffset(1, -1)
+
     local ag = o.icon:CreateAnimationGroup()
     ag:SetLooping("BOUNCE")
     local a = ag:CreateAnimation("Alpha")
@@ -91,7 +96,9 @@ function HL:OnSighting(full, e, unit)
         if RaidNotice_AddMessage and RaidWarningFrame then
             RaidNotice_AddMessage(RaidWarningFrame, "|cffff2020KILL ON SIGHT: " .. name .. "|r", ChatTypeInfo["RAID_WARNING"])
         end
-        self:Print("|cffff4040" .. name .. "|r" .. info .. " is nearby!" .. (e.r ~= "" and (" – " .. e.r) or ""))
+        local bounty = self:Bounty(e.n)
+        self:Print("|cffff4040" .. name .. "|r" .. info .. " is nearby!" .. (e.r ~= "" and (" – " .. e.r) or "")
+            .. (bounty and (" – |cffffd100Bounty: " .. bounty.r .. "|r") or ""))
         if self.settings.sound then HL.PlaySoundSafe(SOUNDKIT and SOUNDKIT.RAID_WARNING) end
     end
 
@@ -127,6 +134,8 @@ function HL:UpdatePlate(unit)
     o:ClearAllPoints()
     o:SetPoint("BOTTOM", plate.UnitFrame or plate, "TOP", 0, self.settings.plateOffsetY or 0)
     o:SetScale(self.settings.plateScale or 1)
+    local bounty = self:Bounty(e.n)
+    o.bounty:SetText(bounty and ("Bounty: " .. bounty.r) or "")
     o:Show()
     o.anim:Play()
     self:OnSighting(full, e, unit)
@@ -248,6 +257,8 @@ if TooltipDataProcessor and Enum and Enum.TooltipDataType then
             tt:AddLine("|cffffaa00Huens Liste: Swine List|r")
         end
         if e.r ~= "" then tt:AddLine(e.r, 1, 0.8, 0.6, true) end
+        local bounty = list == "kos" and HL:Bounty(e.n)
+        if bounty then tt:AddLine("Bounty: " .. bounty.r .. " (set by " .. HL.ShortName(bounty.b) .. ")", 1, 0.82, 0, true) end
         if list == "kos" then
             local count = HL:KillStats(e.n)
             if count > 0 then tt:AddLine(("Killed %d time%s"):format(count, count == 1 and "" or "s"), 1, 0.5, 0.5) end

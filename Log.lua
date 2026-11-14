@@ -65,6 +65,47 @@ function HL:LogItems(showKills, showSightings, showDeaths)
     return items, kills, sightings, deaths
 end
 
+-- Hotspots: activity per zone over the last `period` seconds, busiest first
+function HL:HotZones(period)
+    local s = self.settings
+    local items = self:LogItems(s.logKills, s.logSightings, s.logDeaths)
+    local since = GetServerTime() - period
+    local zones, order = {}, {}
+    for _, it in ipairs(items) do
+        if it.t >= since then
+            local name = (it.z and it.z ~= "") and it.z or "Unknown"
+            local z = zones[name]
+            if not z then
+                z = { name = name, seen = 0, kills = 0, deaths = 0, total = 0, last = 0, players = {} }
+                zones[name] = z
+                order[#order + 1] = z
+            end
+            if it.kind == "kill" then z.kills = z.kills + 1
+            elseif it.kind == "death" then z.deaths = z.deaths + 1
+            else z.seen = z.seen + 1 end
+            z.total = z.total + 1
+            if it.t > z.last then z.last = it.t end
+            local p = HL.ShortName(it.n)
+            z.players[p] = (z.players[p] or 0) + 1
+        end
+    end
+    table.sort(order, function(a, b)
+        if a.total ~= b.total then return a.total > b.total end
+        return a.last > b.last
+    end)
+    return order
+end
+
+local function playersByCount(z)
+    local list = {}
+    for name, n in pairs(z.players) do list[#list + 1] = { name = name, n = n } end
+    table.sort(list, function(a, b)
+        if a.n ~= b.n then return a.n > b.n end
+        return a.name < b.name
+    end)
+    return list
+end
+
 local function place(zone, sub)
     if not zone or zone == "" then return "" end
     if sub and sub ~= "" and sub ~= zone then return zone .. " – " .. sub end
@@ -105,6 +146,20 @@ local function getRow(i)
     r.text = HL.MakeFS(r, 146, 390, "GameFontHighlightSmall")
     r:EnableMouse(true)
     r:SetScript("OnEnter", function(self)
+        local z = self.zone
+        if z then
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:AddLine(z.name, 1, 0.82, 0)
+            GameTooltip:AddLine(("%d sightings, %d kills, %d deaths"):format(z.seen, z.kills, z.deaths), 1, 1, 1)
+            GameTooltip:AddLine("Last activity " .. HL.Ago(z.last), 0.7, 0.7, 0.7)
+            GameTooltip:AddLine(" ")
+            for i, p in ipairs(playersByCount(z)) do
+                if i > 12 then GameTooltip:AddLine("...", 0.7, 0.7, 0.7) break end
+                GameTooltip:AddDoubleLine(p.name, p.n .. "x", 1, 0.4, 0.4, 0.7, 0.7, 0.7)
+            end
+            GameTooltip:Show()
+            return
+        end
         local it = self.item
         if not it then return end
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -132,15 +187,52 @@ local function getRow(i)
     return r
 end
 
+local function refreshZones()
+    local period = page.period
+    local zones = HL:HotZones(period)
+    local shown = math.min(#zones, MAX_ROWS)
+    for i = 1, shown do
+        local z = zones[i]
+        local r = getRow(i)
+        r.item, r.zone = nil, z
+        r.bg:SetColorTexture(1, 1, 1, (i % 2 == 0) and 0.05 or 0)
+        r.time:SetText(HL.Ago(z.last))
+        r.tag:SetText("")
+        local parts = {}
+        if z.seen > 0 then parts[#parts + 1] = "|cffffd100" .. z.seen .. " seen|r" end
+        if z.kills > 0 then parts[#parts + 1] = "|cffff4040" .. z.kills .. (z.kills == 1 and " kill" or " kills") .. "|r" end
+        if z.deaths > 0 then parts[#parts + 1] = "|cffc070ff" .. z.deaths .. (z.deaths == 1 and " death" or " deaths") .. "|r" end
+        local names = {}
+        for j, p in ipairs(playersByCount(z)) do
+            if j > 3 then names[#names + 1] = "..." break end
+            names[#names + 1] = p.name
+        end
+        r.text:SetText(("|cffffffff%s|r  %s  |cff888888%s|r"):format(z.name, table.concat(parts, ", "), table.concat(names, ", ")))
+        r:Show()
+    end
+    for i = shown + 1, #rows do rows[i]:Hide() end
+    content:SetHeight(math.max(1, shown * ROW_H))
+    page.summary:SetText(("%d zone%s with activity in the last %s"):format(#zones, #zones == 1 and "" or "s",
+        period > 86400 and "7 days" or "24 hours"))
+    page.empty:SetShown(shown == 0)
+end
+
 function HL:RefreshLog()
     if not page or not page:IsVisible() then return end
+    local zonesMode = page.mode == "zones"
+    page.h1:SetText(zonesMode and "Last" or "When")
+    page.h3:SetText(zonesMode and "Zone" or "What")
+    page.viewBtn:SetText(zonesMode and "Show timeline" or "Show zones")
+    page.periodBtn:SetShown(zonesMode)
+    page.periodBtn:SetText(page.period > 86400 and "Last 7 days" or "Last 24 hours")
+    if zonesMode then refreshZones() return end
     local items, kills, sightings, deaths = self:LogItems(self.settings.logKills, self.settings.logSightings,
         self.settings.logDeaths)
     local shown = math.min(#items, MAX_ROWS)
     for i = 1, shown do
         local it = items[i]
         local r = getRow(i)
-        r.item = it
+        r.item, r.zone = it, nil
         r.time:SetText(whenText(it.t))
         local where = place(it.z, it.s)
         if it.kind == "kill" then
@@ -179,12 +271,11 @@ function HL:BuildLogPage(parent)
     page.summary = page:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     page.summary:SetPoint("TOPRIGHT", -16, -40)
 
-    local headers = { { "When", 18 }, { "", 110 }, { "What", 158 } }
-    for _, h in ipairs(headers) do
-        local fs = page:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        fs:SetPoint("TOPLEFT", h[2], -62)
-        fs:SetText(h[1])
-    end
+    page.mode, page.period = "timeline", 86400
+    page.h1 = page:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    page.h1:SetPoint("TOPLEFT", 18, -62)
+    page.h3 = page:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    page.h3:SetPoint("TOPLEFT", 158, -62)
 
     local scroll = CreateFrame("ScrollFrame", nil, page, "UIPanelScrollFrameTemplate")
     scroll:SetPoint("TOPLEFT", 12, -78)
@@ -201,8 +292,24 @@ function HL:BuildLogPage(parent)
     HL.MakeCheck(page, "Deaths", "logDeaths", { "BOTTOMLEFT", 84, 12 }, function() HL:RefreshLog() end)
     HL.MakeCheck(page, "Sightings", "logSightings", { "BOTTOMLEFT", 166, 12 }, function() HL:RefreshLog() end)
 
+    -- Timeline <-> hotspots per zone
+    page.viewBtn = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+    page.viewBtn:SetSize(100, 22)
+    page.viewBtn:SetPoint("BOTTOMLEFT", 258, 12)
+    page.viewBtn:SetScript("OnClick", function()
+        page.mode = (page.mode == "zones") and "timeline" or "zones"
+        HL:RefreshLog()
+    end)
+    page.periodBtn = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+    page.periodBtn:SetSize(100, 22)
+    page.periodBtn:SetPoint("LEFT", page.viewBtn, "RIGHT", 4, 0)
+    page.periodBtn:SetScript("OnClick", function()
+        page.period = (page.period > 86400) and 86400 or 7 * 86400
+        HL:RefreshLog()
+    end)
+
     local clear = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
-    clear:SetSize(120, 22)
+    clear:SetSize(110, 22)
     clear:SetPoint("BOTTOMRIGHT", -12, 12)
     clear:SetText("Clear sightings")
     clear:SetScript("OnClick", function() HL:ClearSightingLog() end)

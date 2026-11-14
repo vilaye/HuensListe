@@ -7,6 +7,10 @@
 - Class and level of listed players: stored when someone sees them, shared with sightings, shown in the list (class-colored name, Lv column), tooltips and sighting alerts.
 - Deaths: when you die to a KOS player, it's recorded and shared. The KOS list shows kills / deaths, the Log shows deaths in purple. A death counts for a KOS player who was targeting you (or, if that can't be read, your target or the only KOS player around); deaths out of combat never count.
 - Quiet zones (Quality of Life tab, off by default): no KOS alerts, sharing or log entries in battlegrounds/arenas, or in cities, inns and sanctuaries.
+- Bounties: put a bounty text on a KOS player (right-click their row or the player, or `/hl bounty Firstname Lastname 50g from me`). It shows above the skull, in alerts, tooltips and the list (coin icon), syncs to friends, and is announced and removed when someone kills that player. Paying is up to you.
+- Log tab: "Show zones" switches to a per-zone summary (sightings, kills, deaths and who was there) for the last 24 hours or 7 days.
+- Users tab: new "Week" column with KOS kills since Monday, the week's leader in gold. Chat announces KOS kill streaks (3, 5, 10, 15, ... kills without dying to a KOS player).
+- After a gank (Quality of Life tab, off by default): when you die in combat to an enemy player who isn't listed, a popup offers to add them to the KOS List with a prefilled note. Never in battlegrounds or arenas; a declined player isn't offered again that session.
 - Fixed: the "Target nearby KOS" key binding did nothing unless the on-screen button was on or `/hl macro` had been used. The macro is now created as soon as a key is bound.
 - Fixed: once your full name was known, sync messages from a friend with the same first name and an identical list could be dropped as "your own echo".
 - Fixed: a possible error when the game hides a unit name in a group roster update.

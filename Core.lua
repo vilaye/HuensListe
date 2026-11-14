@@ -15,6 +15,7 @@ local DEFAULTS = {
     avoid = {},     -- same format as entries: the Swine List (own faction)
     kills = {},     -- KOS kill credits: { n = victim, b = killer, t = time, r = zone }
     deaths = {},    -- deaths to KOS players: { n = KOS killer, b = victim (one of us), t = time, r = zone }
+    bounty = {},    -- [key] = { n = KOS player, r = bounty text, b = who set it, t, d } (synced like the lists)
     info = {},      -- [key] = { c = class file ("SHAMAN"), l = level, t = time } for listed players
     selfIds = {},   -- [character GUID] = our full name as the game sends it ("First-Last")
     peers = {},     -- [key] = { n = name, v = version, t = last heard, via = channel }  (other addon users)
@@ -211,7 +212,9 @@ HL.LISTS.kills = {
 }
 -- Deaths to KOS players: same shape, n = the KOS player who killed, b = who died.
 HL.LISTS.deaths = { db = "deaths", label = "Deaths", color = "c070ff", key = HL.LISTS.kills.key }
-HL.SYNC_ORDER = { "kos", "avoid", "kills", "deaths" }
+-- Bounties on KOS players: one per player, r = the bounty text ("50g from Vila").
+HL.LISTS.bounty = { db = "bounty", label = "Bounties", color = "ffd100" }
+HL.SYNC_ORDER = { "kos", "avoid", "kills", "deaths", "bounty" }
 
 function HL:Entries(list) return self.db[HL.LISTS[list or "kos"].db] end
 
@@ -399,6 +402,37 @@ function HL:EditNote(full, newReason)
     self:SetEntry(e.n, newReason, nil, list)
     self:Print(("Note for %s: %s"):format(HL.ColorName(HL.ShortName(e.n), list),
         newReason ~= "" and newReason or "|cff888888(removed)|r"))
+end
+
+-- Bounty on a KOS player (nil if none, or if they're no longer on the KOS List)
+function HL:Bounty(name)
+    local full = HL.NormalizeName(name or "")
+    if not full or not self:Get(full, "kos") then return end
+    local b = self:Get(full, "bounty")
+    if b and b.r ~= "" then return b end
+end
+
+-- text = "" removes the bounty
+function HL:SetBounty(name, text)
+    local e = self:Get(HL.NormalizeName(name or "") or "", "kos")
+    if not e then self:Print("Bounties are for players on the " .. HL.ListLabel("kos") .. ": " .. tostring(name)) return end
+    text = HL.Clean(text, 40)
+    local cur = self:Bounty(e.n)
+    if text == "" then
+        if not cur then return end
+        self:SetEntry(e.n, "", true, "bounty")
+        self:Print("Removed the bounty on " .. HL.ColorName(HL.ShortName(e.n), "kos"))
+        return
+    end
+    if cur and cur.r == text then return end
+    self:SetEntry(e.n, text, nil, "bounty")
+    self:Print(("|cffffd100Bounty|r on %s: %s"):format(HL.ColorName(HL.ShortName(e.n), "kos"), text))
+end
+
+-- Monday 00:00 (UTC) of the current week, for the weekly kill board
+function HL.WeekStart()
+    local days = math.floor(GetServerTime() / 86400)
+    return (days - (days + 3) % 7) * 86400
 end
 
 -- Move a player to the other list, keeping the reason
