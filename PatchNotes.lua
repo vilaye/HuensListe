@@ -18,7 +18,7 @@ HL.PATCH_NOTES = {
         "High priority KOS players: own alert, bigger skull, top of the list (Shift-click a row)",
         "Revenge: a KOS player who kills you is your revenge target for 10 minutes",
         "Zone warning when you enter a zone with recent KOS activity",
-        "Campfire buff reminder: pick your camp buff, get a reminder when it's gone (Quality of Life, off by default)",
+        "Campfire buff reminder, like the Well Fed one (Quality of Life, off by default)",
         "Fixed: the KOS target key binding works without creating the macro first",
         "Fixed: a friend with your first name could be mistaken for you",
     } },

@@ -1,6 +1,6 @@
 -- Huens Liste: quality-of-life features
 --   Well Fed reminder: movable on-screen warning while you have no food buff
---   Campfire reminder: the same for the camp buff(s) you picked
+--   Campfire reminder: the same for the campfire buff (spell 1229741)
 local _, HL = ...
 
 ---------------------------------------------------------------------------
@@ -49,10 +49,19 @@ end
 ---------------------------------------------------------------------------
 -- Campfire buff detection
 ---------------------------------------------------------------------------
--- Camp buffs depend on what was placed at the fire, so there is no fixed name:
--- the player picks the buff(s) to watch from the buffs they have right now.
+-- The campfire buff is spell 1229741, so the reminder works without any setup.
+-- Extra buffs can be added by name with /hl campfire set Buff Name:
 -- settings.campBuffs = { { n = name, id = spellId, icon = icon }, ... }
+local CAMP_SPELL_ID = 1229741
 local CAMP_ICON = "Interface\\Icons\\Spell_Fire_Fire"
+
+local function campIcon()
+    if C_Spell and C_Spell.GetSpellTexture then
+        local ok, tex = pcall(C_Spell.GetSpellTexture, CAMP_SPELL_ID)
+        if ok and tex and not HL.IsSecret(tex) then return tex end
+    end
+    return CAMP_ICON
+end
 
 -- List of the player's buffs { name, icon, spellId }, or nil while the game hides them
 function HL:PlayerBuffs()
@@ -85,7 +94,7 @@ local function campIndex(name, id)
     end
 end
 
-function HL:IsCampBuff(name, id) return campIndex(name, id) ~= nil end
+function HL:IsCampBuff(name, id) return id == CAMP_SPELL_ID or campIndex(name, id) ~= nil end
 
 -- Add the buff to the watched ones, or remove it if it's already there
 function HL:ToggleCampBuff(name, id, icon)
@@ -105,17 +114,16 @@ end
 function HL:CampBuffText()
     local names = {}
     for _, b in ipairs(self:CampBuffs()) do names[#names + 1] = b.n end
-    if #names == 0 then return "|cffff8040none chosen yet|r" end
-    return table.concat(names, ", ")
+    if #names == 0 then return "spell " .. CAMP_SPELL_ID end
+    return "spell " .. CAMP_SPELL_ID .. ", " .. table.concat(names, ", ")
 end
 
--- true / false (any watched buff counts), nil if aura data is hidden or nothing is chosen
+-- true / false (the campfire buff or any extra watched buff), nil if aura data is hidden
 function HL:HasCampBuff()
-    if #self:CampBuffs() == 0 then return nil end
     local buffs = self:PlayerBuffs()
     if not buffs then return nil end
     for _, a in ipairs(buffs) do
-        if campIndex(a.name, a.spellId) then return true end
+        if self:IsCampBuff(a.name, a.spellId) then return true end
     end
     return false
 end
@@ -223,10 +231,7 @@ local function newReminder(opts)
         if okDead and not HL.IsSecret(dead) and dead then setVisible(false) return end
 
         local has = opts.has()
-        if has == nil then -- data hidden right now: keep the current state
-            if opts.hideWhenUnknown and opts.hideWhenUnknown() then setVisible(false) end
-            return
-        end
+        if has == nil then return end -- data hidden right now: keep the current state
         setVisible(not has)
     end
 
@@ -253,13 +258,8 @@ local wellFed = newReminder({
 local campfire = newReminder({
     frameName = "HuensListeCampfireFrame", posKey = "campfirePos", enabledKey = "campfireReminder",
     defaultY = 130, width = 400, text = "Campfire buff is missing!",
-    icon = function()
-        local first = HL.settings and HL:CampBuffs()[1]
-        return first and first.icon or CAMP_ICON
-    end,
+    icon = campIcon,
     has = function() return HL:HasCampBuff() end,
-    -- no buff chosen: nothing to remind about
-    hideWhenUnknown = function() return #HL:CampBuffs() == 0 end,
 })
 
 function HL:UpdateWellFed() wellFed.update() end
