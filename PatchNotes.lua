@@ -5,6 +5,7 @@ local _, HL = ...
 HL.PATCH_NOTES = {
     { version = "1.11.1", notes = {
         "List messages in chat: \"added\" is green and \"removed\" is red",
+        "Chosen-buff reminder: options \"Only show in combat\" and \"Hide in main cities\" (under Set up buffs)",
     } },
     { version = "1.11.0", notes = {
         "Friends on the world map: share your location and see friends who share theirs (Quality of Life, both off by default)",

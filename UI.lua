@@ -567,7 +567,7 @@ function HL:BuildQoLPage(parent)
     local chooseBtn = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
     chooseBtn:SetSize(96, 22)
     chooseBtn:SetPoint("TOPLEFT", 298, -135)
-    chooseBtn:SetText("Choose buffs")
+    chooseBtn:SetText("Set up buffs")
 
     local picker = CreateFrame("Frame", nil, page, "BackdropTemplate")
     picker:SetSize(300, 60)
@@ -588,6 +588,11 @@ function HL:BuildQoLPage(parent)
     picker.rows = {}
 
     local MAX_PICK = 12
+    -- options of this reminder, below the buff list
+    local combatCheck = makeCheck(picker, "Only show in combat", "buffWatchCombatOnly", { "TOPLEFT", 6, -40 },
+        function() HL:UpdateBuffWatch() end)
+    local cityCheck = makeCheck(picker, "Hide in main cities (Stormwind, Orgrimmar ...)", "buffWatchNoCities",
+        { "TOPLEFT", 6, -62 }, function() HL:UpdateBuffWatch() end)
     local function refreshPicker()
         local buffs = HL:PlayerBuffs()
         local items, seen = {}, {}
@@ -640,7 +645,11 @@ function HL:BuildQoLPage(parent)
             row:Show()
         end
         for i = shown + 1, #picker.rows do picker.rows[i]:Hide() end
-        picker:SetHeight(46 + shown * 18)
+        combatCheck:ClearAllPoints()
+        combatCheck:SetPoint("TOPLEFT", 6, -42 - shown * 18)
+        cityCheck:ClearAllPoints()
+        cityCheck:SetPoint("TOPLEFT", 6, -64 - shown * 18)
+        picker:SetHeight(96 + shown * 18)
     end
     chooseBtn:SetScript("OnClick", function()
         imbuePicker:Hide()
@@ -1350,7 +1359,8 @@ local HELP = {
     "|cffffff00/hl location [on/off]|r – share my location; |cffffff00/hl map [on/off]|r – show friends on the world map",
     "|cffffff00/hl weapon [on/off]|r – reminder when your weapon has no imbue or poison",
     "|cffffff00/hl imbue main Name|r / |cffffff00off Name|r – what a click on that reminder applies (|cffffff00clear|r to forget)",
-    "|cffffff00/hl remind [on/off]|r – reminder for buffs you chose (QoL tab > Choose buffs)",
+    "|cffffff00/hl remind [on/off]|r – reminder for buffs you chose (QoL tab > Set up buffs)",
+    "|cffffff00/hl remind combat [on/off]|r – only in combat; |cffffff00/hl remind cities [on/off]|r – hide in main cities",
     "|cffffff00/hl remind add Buff Name|r – watch a buff; |cffffff00del Buff Name|r, |cffffff00clear|r, |cffffff00list|r",
     "|cffffff00/hl buffs|r – list your buffs (troubleshooting for the reminders)",
     "|cffffff00/hl export|r / |cffffff00/hl import|r – share via copy & paste",
@@ -1517,10 +1527,16 @@ SlashCmdList.HUENSLISTE = function(msg)
             HL:Print("Watched buffs: " .. HL:WatchBuffText())
         elseif sub == "list" then
             HL:Print("Watched buffs: " .. HL:WatchBuffText())
+        elseif sub == "combat" then
+            toggle("buffWatchCombatOnly", name ~= "" and name:lower() or nil, "Chosen buffs: only show in combat")
+            HL:UpdateBuffWatch()
+        elseif sub == "cities" then
+            toggle("buffWatchNoCities", name ~= "" and name:lower() or nil, "Chosen buffs: hide in main cities")
+            HL:UpdateBuffWatch()
         else
             toggle("buffWatchReminder", arg, "Own buff reminder")
             if HL.settings.buffWatchReminder and #HL:WatchBuffs() == 0 then
-                HL:Print("No buffs chosen yet: QoL tab > Choose buffs, or /hl remind add Buff Name")
+                HL:Print("No buffs chosen yet: QoL tab > Set up buffs, or /hl remind add Buff Name")
             end
             HL:UpdateBuffWatch()
         end

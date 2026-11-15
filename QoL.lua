@@ -399,7 +399,8 @@ end
 ---------------------------------------------------------------------------
 -- On-screen reminders (one movable frame each)
 ---------------------------------------------------------------------------
--- opts: frameName, posKey, enabledKey, defaultY, text (string or function), icon(), has()
+-- opts: frameName, posKey, enabledKey, defaultY, text (string or function), icon(), has(),
+--       gate() (optional: false = don't show even though the buff is missing)
 local function newReminder(opts)
     local r = { unlocked = false }
     local frame
@@ -487,12 +488,17 @@ local function newReminder(opts)
         if okDead and not HL.IsSecret(dead) and dead then setVisible(false) return end
 
         local has = opts.has()
-        if has == nil then return end -- data hidden right now: keep the current state
-        if not has and type(opts.text) == "function" then
-            frame.text:SetText(opts.text())
-            frame.icon:SetTexture(opts.icon())
+        if has ~= nil then
+            r.lastHas = has
+            if not has and type(opts.text) == "function" then
+                frame.text:SetText(opts.text())
+                frame.icon:SetTexture(opts.icon())
+            end
         end
-        setVisible(not has)
+        -- data hidden right now (has == nil): go by what we saw last
+        local missing = (r.lastHas == false)
+        if missing and opts.gate and not opts.gate() then missing = false end
+        setVisible(missing)
     end
 
     function r.update()
@@ -587,6 +593,28 @@ local QUESTION_ICON = "Interface\\Icons\\INV_Misc_QuestionMark"
 local missingNow = {}
 local buffWatch, buffClicker
 
+-- Capital cities, by map ID (classic and modern numbering) and by English zone name
+local CITY_MAPS = { [1453] = true, [1455] = true, [1457] = true, [1454] = true, [1456] = true, [1458] = true,
+    [84] = true, [87] = true, [89] = true, [85] = true, [88] = true, [90] = true, [998] = true }
+local CITY_NAMES = { ["stormwind city"] = true, ["stormwind"] = true, ["ironforge"] = true, ["darnassus"] = true,
+    ["orgrimmar"] = true, ["thunder bluff"] = true, ["undercity"] = true }
+
+function HL:InMainCity()
+    if C_Map and C_Map.GetBestMapForUnit then
+        local ok, mapID = pcall(C_Map.GetBestMapForUnit, "player")
+        if ok and mapID and not HL.IsSecret(mapID) and CITY_MAPS[mapID] then return true end
+    end
+    for _, fn in ipairs({ GetRealZoneText, GetZoneText }) do
+        local ok, zone = pcall(fn)
+        if ok and type(zone) == "string" and not HL.IsSecret(zone) and CITY_NAMES[zone:lower()] then return true end
+    end
+    return false
+end
+
+-- InCombatLockdown() is still false while PLAYER_REGEN_DISABLED is being handled,
+-- so combat is tracked from the events themselves.
+local fighting = false
+
 -- Left / right click cast the first two missing buffs that are spells you know
 local function updateBuffClicker()
     if not buffClicker or not buffWatch then return end
@@ -605,7 +633,9 @@ local function updateBuffClicker()
     elseif #clicks > 0 then
         hint = "Left-click: " .. clicks[1].name
         if clicks[2] then hint = hint .. "  ·  Right-click: " .. clicks[2].name end
-        if inCombat() then hint = "Click to cast after combat" end
+        if inCombat() or fighting then
+            hint = (not HL.settings.buffWatchCombatOnly) and "Click to cast after combat" or nil
+        end
     end
     frame.hint:SetText(hint or "")
     frame.hint:SetShown(hint ~= nil)
@@ -628,7 +658,15 @@ buffWatch = newReminder({
         missingNow = missing
         return #missing == 0
     end,
-    onCreate = function() buffClicker = newClicker("HuensListeBuffButton") end,
+    gate = function()
+        if HL.settings.buffWatchCombatOnly and not fighting then return false end
+        if HL.settings.buffWatchNoCities and HL:InMainCity() then return false end
+        return true
+    end,
+    onCreate = function()
+        buffClicker = newClicker("HuensListeBuffButton")
+        fighting = inCombat()
+    end,
     after = updateBuffClicker,
 })
 
@@ -737,6 +775,8 @@ local QOL_DEFAULTS = {
     wellFedReminder = false,
     campfireReminder = false,
     buffWatchReminder = false,
+    buffWatchCombatOnly = false,
+    buffWatchNoCities = false,
     weaponReminder = false,
     targetButton = false,
     quietPvP = false,
@@ -780,4 +820,9 @@ end)
 HL:On("PLAYER_EQUIPMENT_CHANGED", function() weaponImbue.update() end)
 -- bought or used up the poison; combat started (the click part is hidden by the game)
 HL:On("BAG_UPDATE_DELAYED", function() weaponImbue.update() end)
-HL:On("PLAYER_REGEN_DISABLED", function() weaponImbue.update(); buffWatch.update() end)
+HL:On("PLAYER_REGEN_DISABLED", function() fighting = true; weaponImbue.update(); buffWatch.update() end)
+HL:On("PLAYER_REGEN_ENABLED", function() fighting = false; buffWatch.update() end)
+-- entering or leaving a city
+for _, ev in ipairs({ "ZONE_CHANGED_NEW_AREA", "ZONE_CHANGED", "ZONE_CHANGED_INDOORS" }) do
+    HL:On(ev, function() buffWatch.update() end)
+end
