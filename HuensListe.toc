@@ -17,6 +17,7 @@ QoL.lua
 Kills.lua
 Log.lua
 Map.lua
+Mount.lua
 Target.lua
 PatchNotes.lua
 UI.lua

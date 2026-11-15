@@ -1,5 +1,8 @@
 # Huens Liste
 
+## v1.12.0
+- Riding trinket (Quality of Life tab, off by default): while you are mounted the addon equips the Carrot on a Stick, and when you dismount it puts your normal trinket back. Gear can't be swapped in combat, so if you get dismounted in a fight the swap back happens as soon as combat ends. "Set up" lets you pick another trinket and choose the upper or lower trinket slot (default: lower). Not used on flight paths, in battlegrounds or arenas. `/hl mount [on/off]`.
+
 ## v1.11.1
 - Chat messages about list changes: the word "added" is green and "removed" is red, for your own changes and for those of friends.
 - Chosen-buff reminder: two new options at the bottom of the "Set up buffs" list (the button was called "Choose buffs"). "Only show in combat" keeps the text away until a fight starts; "Hide in main cities" hides it in Stormwind, Ironforge, Darnassus, Orgrimmar, Thunder Bluff and Undercity. Also `/hl remind combat [on/off]` and `/hl remind cities [on/off]`.

@@ -788,6 +788,83 @@ function HL:BuildQoLPage(parent)
     makeCheck(page, "Show friends on the world map", "showFriendsOnMap", { "TOPLEFT", 300, -386 },
         function() HL:RefreshMapPins() end)
 
+    -- Riding trinket: equip while mounted, swap back on dismount
+    makeCheck(page, "While mounted: equip my riding trinket (e.g. Carrot on a Stick)", "mountTrinket",
+        { "TOPLEFT", 16, -408 }, function() HL:CheckMountTrinket() end)
+    local mountBtn = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+    mountBtn:SetSize(80, 22)
+    mountBtn:SetPoint("TOPLEFT", 486, -409)
+    mountBtn:SetText("Set up")
+
+    local mountPicker = CreateFrame("Frame", nil, page, "BackdropTemplate")
+    mountPicker:SetSize(300, 60)
+    mountPicker:SetPoint("BOTTOMRIGHT", mountBtn, "TOPRIGHT", 0, 2) -- opens upwards: the row is at the bottom
+    mountPicker:SetFrameStrata("DIALOG")
+    mountPicker:EnableMouse(true)
+    if mountPicker.SetBackdrop then
+        mountPicker:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            edgeSize = 12, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
+        mountPicker:SetBackdropColor(0.05, 0.05, 0.05, 0.97)
+        mountPicker:SetBackdropBorderColor(0.6, 0.6, 0.6)
+    end
+    mountPicker:Hide()
+    mountPicker.title = mountPicker:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    mountPicker.title:SetPoint("TOPLEFT", 10, -8)
+    mountPicker.title:SetWidth(280)
+    mountPicker.title:SetJustifyH("LEFT")
+    mountPicker.title:SetText("Click the trinket to wear while mounted:")
+    mountPicker.rows = {}
+    local slotBtn = CreateFrame("Button", nil, mountPicker, "UIPanelButtonTemplate")
+    slotBtn:SetSize(280, 22)
+    slotBtn:SetPoint("BOTTOMLEFT", 10, 8)
+
+    local MAX_TRINKETS = 10
+    local function refreshMountPicker()
+        local items = HL:TrinketCandidates()
+        local chosen = HL:MountTrinket().id
+        local shown = math.min(#items, MAX_TRINKETS)
+        for i = 1, shown do
+            local row = mountPicker.rows[i]
+            if not row then
+                row = CreateFrame("Button", nil, mountPicker)
+                row:SetSize(280, 18)
+                row:SetPoint("TOPLEFT", 10, -26 - (i - 1) * 18)
+                row.icon = row:CreateTexture(nil, "ARTWORK")
+                row.icon:SetSize(16, 16)
+                row.icon:SetPoint("LEFT", 0, 0)
+                row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+                row.text:SetPoint("LEFT", 20, 0)
+                row.text:SetWidth(258)
+                row.text:SetJustifyH("LEFT")
+                if row.text.SetWordWrap then row.text:SetWordWrap(false) end
+                local hl = row:CreateTexture(nil, "HIGHLIGHT")
+                hl:SetAllPoints()
+                hl:SetColorTexture(1, 1, 1, 0.12)
+                mountPicker.rows[i] = row
+            end
+            local item = items[i]
+            row.icon:SetTexture(item.icon)
+            row.text:SetText((item.id == chosen and "|cff40ff40[x]|r " or "[  ] ") .. item.name)
+            row:SetScript("OnClick", function()
+                HL:SetMountTrinket(item.id, item.name, item.icon)
+                refreshMountPicker()
+            end)
+            row:Show()
+        end
+        for i = shown + 1, #mountPicker.rows do mountPicker.rows[i]:Hide() end
+        slotBtn:SetText("Goes into the " .. (HL:MountTrinketSlot() == 13 and "upper" or "lower")
+            .. " trinket slot (click to change)")
+        mountPicker:SetHeight(62 + shown * 18)
+    end
+    slotBtn:SetScript("OnClick", function()
+        HL:SetMountTrinketSlot(HL:MountTrinketSlot() == 13 and 14 or 13)
+        refreshMountPicker()
+    end)
+    mountBtn:SetScript("OnClick", function()
+        picker:Hide(); imbuePicker:Hide()
+        if mountPicker:IsShown() then mountPicker:Hide() else refreshMountPicker(); mountPicker:Show() end
+    end)
+
     page:SetScript("OnShow", function()
         for _, refresh in ipairs(refreshers) do refresh() end
     end)
@@ -799,6 +876,7 @@ function HL:BuildQoLPage(parent)
         if HL:IsWeaponImbueUnlocked() then HL:SetWeaponImbueUnlocked(false) end
         picker:Hide()
         imbuePicker:Hide()
+        mountPicker:Hide()
     end)
     return page
 end
@@ -1355,6 +1433,7 @@ local HELP = {
     "|cffffff00/hl minimap [on/off]|r – show/hide the minimap button",
     "|cffffff00/hl wellfed [on/off]|r – Well Fed reminder (move it in the Quality of Life tab)",
     "|cffffff00/hl campfire [on/off]|r – campfire buff reminder (move it in the Quality of Life tab)",
+    "|cffffff00/hl mount [on/off]|r – equip the riding trinket while mounted (choose it in the QoL tab > Set up)",
     "|cffffff00/hl where|r – where your friends are (those who share their location)",
     "|cffffff00/hl location [on/off]|r – share my location; |cffffff00/hl map [on/off]|r – show friends on the world map",
     "|cffffff00/hl weapon [on/off]|r – reminder when your weapon has no imbue or poison",
@@ -1490,6 +1569,10 @@ SlashCmdList.HUENSLISTE = function(msg)
             toggle("campfireReminder", arg, "Campfire reminder")
             HL:UpdateCampfire()
         end
+    elseif cmd == "mount" then
+        toggle("mountTrinket", arg, "Riding trinket while mounted")
+        if HL.settings.mountTrinket then HL:Print("Using " .. HL:MountTrinketText() .. ".") end
+        HL:CheckMountTrinket()
     elseif cmd == "where" then
         HL:PrintFriendLocations()
     elseif cmd == "location" then

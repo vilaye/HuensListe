@@ -53,6 +53,7 @@ Getting ganked? Put the ganker on the list. Everyone in your group of friends ge
 | `/hl campfire [on/off]` | Campfire buff reminder on/off (move it in the Quality of Life tab) |
 | `/hl weapon [on/off]` | Reminder when your weapon has no imbue or poison |
 | `/hl imbue main Name` / `off Name` / `clear` | What a click on the weapon reminder applies |
+| `/hl mount [on/off]` | Equip the riding trinket (Carrot on a Stick) while mounted, swap back on dismount |
 | `/hl where` | Where your friends are (those who share their location) |
 | `/hl location [on/off]` / `/hl map [on/off]` | Share my location / show friends on the world map |
 | `/hl remind [on/off]` | Reminder for buffs you chose; `add Buff Name`, `del Buff Name`, `clear`, `list` |

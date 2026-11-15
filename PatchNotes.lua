@@ -3,6 +3,9 @@
 local _, HL = ...
 
 HL.PATCH_NOTES = {
+    { version = "1.12.0", notes = {
+        "Riding trinket: equips the Carrot on a Stick (or a trinket you choose) while mounted and swaps back on dismount (Quality of Life, off by default)",
+    } },
     { version = "1.11.1", notes = {
         "List messages in chat: \"added\" is green and \"removed\" is red",
         "Chosen-buff reminder: options \"Only show in combat\" and \"Hide in main cities\" (under Set up buffs)",
