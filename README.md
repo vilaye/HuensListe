@@ -56,6 +56,7 @@ Getting ganked? Put the ganker on the list. Everyone in your group of friends ge
 | `/hl mount [on/off]` | Equip the riding trinket (Carrot on a Stick) while mounted, swap back on dismount |
 | `/hl where` | Where your friends are (those who share their location) |
 | `/hl location [on/off]` / `/hl map [on/off]` | Share my location / show friends on the world map |
+| `/hl food Item Name` / `clear` | The food a click on the Well Fed reminder eats |
 | `/hl remind [on/off]` | Reminder for buffs you chose; `add Buff Name`, `del Buff Name`, `clear`, `list` |
 | `/hl buffs` | List your buffs (troubleshooting) |
 | `/hl offset <px>`, `/hl scale <0.5–2>` | Move/resize the nameplate skull |

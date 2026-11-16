@@ -1,5 +1,6 @@
 -- Huens Liste: quality-of-life features
---   Well Fed reminder: movable on-screen warning while you have no food buff
+--   Well Fed reminder: movable on-screen warning while you have no food buff,
+--     with click-to-eat for the food you chose
 --   Campfire reminder: the same for the campfire buff / Boosted Rest debuff
 --   Weapon imbue reminder: Windfury Weapon, poisons etc. (temporary weapon enchants),
 --     with click-to-apply for the imbue / poison chosen per hand
@@ -538,20 +539,6 @@ local function newReminder(opts)
     return r
 end
 
-local wellFed = newReminder({
-    frameName = "HuensListeWellFedFrame", posKey = "wellFedPos", enabledKey = "wellFedReminder",
-    defaultY = 180, text = "You are not Well Fed!",
-    icon = function() return FOOD_ICON end,
-    has = function() return HL:HasWellFed() end,
-})
-
-local campfire = newReminder({
-    frameName = "HuensListeCampfireFrame", posKey = "campfirePos", enabledKey = "campfireReminder",
-    defaultY = 130, width = 480, text = "No campfire or Boosted Rest buff!",
-    icon = campIcon,
-    has = function() return HL:HasCampBuff() end,
-})
-
 -- Click part of a reminder: a secure button laid over the text. The game doesn't let
 -- addons show, hide, move or change such a button in combat, so it lives in a holder
 -- that the game itself hides in combat, and everything else is done out of combat only.
@@ -606,6 +593,105 @@ end
 
 local MOVE_HINT = "Drag to move – click \"Lock\" in /hl when done"
 
+---------------------------------------------------------------------------
+-- Well Fed: the buff food to eat on a click
+---------------------------------------------------------------------------
+-- settings.wellFedFood = { id, name, icon }
+local FOOD_SUBCLASS = 5 -- consumable subclass "Food & Drink"
+
+-- Usable consumables from the bags, food first
+function HL:FoodCandidates()
+    local food, others, seen = {}, {}, {}
+    if C_Container and C_Container.GetContainerNumSlots then
+        local getInstant = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
+        local getSpell = (C_Item and C_Item.GetItemSpell) or GetItemSpell
+        local getName = (C_Item and C_Item.GetItemNameByID) or function(id) return (GetItemInfo(id)) end
+        for bag = 0, 5 do
+            local okN, slots = pcall(C_Container.GetContainerNumSlots, bag)
+            for slot = 1, (okN and tonumber(slots)) or 0 do
+                local okI, info = pcall(C_Container.GetContainerItemInfo, bag, slot)
+                local id = okI and type(info) == "table" and info.itemID
+                if id and not seen[id] then
+                    seen[id] = true
+                    local okC, _, _, _, _, icon, classID, subclassID = pcall(getInstant, id)
+                    local okS, useSpell = pcall(getSpell, id)
+                    local okNm, name = pcall(getName, id)
+                    if okC and classID == CONSUMABLE_CLASS and okS and useSpell and okNm and type(name) == "string" then
+                        local entry = { id = id, name = name, icon = info.iconFileID or icon }
+                        if subclassID == FOOD_SUBCLASS then food[#food + 1] = entry else others[#others + 1] = entry end
+                    end
+                end
+            end
+        end
+    end
+    for _, e in ipairs(others) do food[#food + 1] = e end
+    return food
+end
+
+-- Choose the food; the same one again clears it. Returns true if set.
+function HL:SetWellFedFood(entry)
+    local cur = self.settings.wellFedFood
+    if not entry or (cur and entry.id and cur.id == entry.id) then
+        self.settings.wellFedFood = nil
+    else
+        self.settings.wellFedFood = { id = entry.id, name = entry.name, icon = entry.icon }
+    end
+    self:UpdateWellFed()
+    return self.settings.wellFedFood ~= nil
+end
+
+-- /hl food Name: an item from the bags with that name, else the bare name
+function HL:SetWellFedFoodByName(name)
+    if type(name) ~= "string" or name == "" then return end
+    local entry
+    for _, c in ipairs(self:FoodCandidates()) do
+        if c.name:lower() == name:lower() then entry = c break end
+    end
+    self.settings.wellFedFood = nil
+    return self:SetWellFedFood(entry or { name = name })
+end
+
+local wellFed, foodClicker
+local fighting = false -- set from the combat events further down
+
+local function updateFoodClicker()
+    if not foodClicker or not wellFed then return end
+    local frame = wellFed.frame()
+    if not frame then return end
+    local food = HL.settings.wellFedFood
+    local clicks, hint = {}, nil
+    if wellFed.unlocked then
+        hint = MOVE_HINT
+    elseif wellFed.shown() and type(food) == "table" and food.name then
+        if food.id and itemCount(food.id) == 0 then
+            hint = "No " .. food.name .. " in your bags"
+        else
+            clicks[1] = { kind = "item", name = food.name }
+            hint = (inCombat() or fighting) and "Click to eat after combat" or ("Click: eat " .. food.name)
+        end
+    end
+    if wellFed.iconOnly() and not wellFed.unlocked then hint = nil end
+    frame.hint:SetText(hint or "")
+    frame.hint:SetShown(hint ~= nil)
+    foodClicker.set(frame, clicks)
+end
+
+wellFed = newReminder({
+    frameName = "HuensListeWellFedFrame", posKey = "wellFedPos", enabledKey = "wellFedReminder",
+    defaultY = 180, text = "You are not Well Fed!",
+    icon = function() return FOOD_ICON end,
+    has = function() return HL:HasWellFed() end,
+    onCreate = function() foodClicker = newClicker("HuensListeFoodButton") end,
+    after = updateFoodClicker,
+})
+
+local campfire = newReminder({
+    frameName = "HuensListeCampfireFrame", posKey = "campfirePos", enabledKey = "campfireReminder",
+    defaultY = 130, width = 480, text = "No campfire or Boosted Rest buff!",
+    icon = campIcon,
+    has = function() return HL:HasCampBuff() end,
+})
+
 -- Own buffs: one frame that names what is missing
 local QUESTION_ICON = "Interface\\Icons\\INV_Misc_QuestionMark"
 local missingNow = {}
@@ -630,8 +716,7 @@ function HL:InMainCity()
 end
 
 -- InCombatLockdown() is still false while PLAYER_REGEN_DISABLED is being handled,
--- so combat is tracked from the events themselves.
-local fighting = false
+-- so combat is tracked from the events themselves ("fighting", declared above).
 
 -- Left / right click cast the first two missing buffs that are spells you know
 local function updateBuffClicker()
@@ -843,9 +928,9 @@ HL:On("UNIT_INVENTORY_CHANGED", function(unit)
 end)
 HL:On("PLAYER_EQUIPMENT_CHANGED", function() weaponImbue.update() end)
 -- bought or used up the poison; combat started (the click part is hidden by the game)
-HL:On("BAG_UPDATE_DELAYED", function() weaponImbue.update() end)
-HL:On("PLAYER_REGEN_DISABLED", function() fighting = true; weaponImbue.update(); buffWatch.update() end)
-HL:On("PLAYER_REGEN_ENABLED", function() fighting = false; buffWatch.update() end)
+HL:On("BAG_UPDATE_DELAYED", function() weaponImbue.update(); wellFed.update() end)
+HL:On("PLAYER_REGEN_DISABLED", function() fighting = true; weaponImbue.update(); buffWatch.update(); wellFed.update() end)
+HL:On("PLAYER_REGEN_ENABLED", function() fighting = false; buffWatch.update(); wellFed.update() end)
 -- entering or leaving a city
 for _, ev in ipairs({ "ZONE_CHANGED_NEW_AREA", "ZONE_CHANGED", "ZONE_CHANGED_INDOORS" }) do
     HL:On(ev, function() buffWatch.update() end)

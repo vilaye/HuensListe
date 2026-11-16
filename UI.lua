@@ -564,7 +564,78 @@ function HL:BuildQoLPage(parent)
         function(v) HL:SetWeaponImbueUnlocked(v) end,
         function() HL:ResetWeaponImbuePosition() end)
 
-    local imbuePicker -- created further down; the two pickers close each other
+    local imbuePicker -- created further down; the pickers close each other
+
+    -- Which food a click on the Well Fed reminder eats
+    local foodBtn = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+    foodBtn:SetSize(96, 22)
+    foodBtn:SetPoint("TOPLEFT", 298, -91)
+    foodBtn:SetText("Choose food")
+
+    local foodPicker = CreateFrame("Frame", nil, page, "BackdropTemplate")
+    foodPicker:SetSize(300, 60)
+    foodPicker:SetPoint("TOPLEFT", foodBtn, "BOTTOMLEFT", 0, -2)
+    foodPicker:SetFrameStrata("DIALOG")
+    foodPicker:EnableMouse(true)
+    if foodPicker.SetBackdrop then
+        foodPicker:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            edgeSize = 12, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
+        foodPicker:SetBackdropColor(0.05, 0.05, 0.05, 0.97)
+        foodPicker:SetBackdropBorderColor(0.6, 0.6, 0.6)
+    end
+    foodPicker:Hide()
+    foodPicker.title = foodPicker:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    foodPicker.title:SetPoint("TOPLEFT", 10, -8)
+    foodPicker.title:SetWidth(280)
+    foodPicker.title:SetJustifyH("LEFT")
+    foodPicker.rows = {}
+
+    local MAX_FOOD = 14
+    local function refreshFoodPicker()
+        local chosen = HL.settings.wellFedFood
+        local items = {}
+        if chosen then items[1] = chosen end -- first, so it can be removed when the bags are empty
+        for _, c in ipairs(HL:FoodCandidates()) do
+            if not (chosen and (c.id == chosen.id or c.name == chosen.name)) then items[#items + 1] = c end
+        end
+        if #items == 0 then
+            foodPicker.title:SetText("No food found in your bags.\nOr type /hl food Item Name")
+        else
+            foodPicker.title:SetText("Click your buff food. Clicking the reminder\nthen eats it (out of combat).")
+        end
+        local shown = math.min(#items, MAX_FOOD)
+        for i = 1, shown do
+            local row = foodPicker.rows[i]
+            if not row then
+                row = CreateFrame("Button", nil, foodPicker)
+                row:SetSize(280, 18)
+                row:SetPoint("TOPLEFT", 10, -38 - (i - 1) * 18)
+                row.icon = row:CreateTexture(nil, "ARTWORK")
+                row.icon:SetSize(16, 16)
+                row.icon:SetPoint("LEFT", 0, 0)
+                row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+                row.text:SetPoint("LEFT", 20, 0)
+                row.text:SetWidth(258)
+                row.text:SetJustifyH("LEFT")
+                if row.text.SetWordWrap then row.text:SetWordWrap(false) end
+                local hl = row:CreateTexture(nil, "HIGHLIGHT")
+                hl:SetAllPoints()
+                hl:SetColorTexture(1, 1, 1, 0.12)
+                foodPicker.rows[i] = row
+            end
+            local item = items[i]
+            local isChosen = chosen and (item.id == chosen.id or item.name == chosen.name)
+            row.icon:SetTexture(item.icon)
+            row.text:SetText((isChosen and "|cff40ff40[x]|r " or "[  ] ") .. item.name)
+            row:SetScript("OnClick", function()
+                if isChosen then HL:SetWellFedFood(nil) else HL.settings.wellFedFood = nil; HL:SetWellFedFood(item) end
+                refreshFoodPicker()
+            end)
+            row:Show()
+        end
+        for i = shown + 1, #foodPicker.rows do foodPicker.rows[i]:Hide() end
+        foodPicker:SetHeight(46 + shown * 18)
+    end
     -- Which buffs to watch: picked from the buffs you have right now
     local chooseBtn = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
     chooseBtn:SetSize(96, 22)
@@ -654,7 +725,7 @@ function HL:BuildQoLPage(parent)
         picker:SetHeight(96 + shown * 18)
     end
     chooseBtn:SetScript("OnClick", function()
-        imbuePicker:Hide()
+        imbuePicker:Hide(); foodPicker:Hide()
         if picker:IsShown() then picker:Hide() else refreshPicker(); picker:Show() end
     end)
 
@@ -742,8 +813,12 @@ function HL:BuildQoLPage(parent)
         for i = shown + 1, #imbuePicker.rows do imbuePicker.rows[i]:Hide() end
         imbuePicker:SetHeight(46 + shown * 18)
     end
+    foodBtn:SetScript("OnClick", function()
+        picker:Hide(); imbuePicker:Hide()
+        if foodPicker:IsShown() then foodPicker:Hide() else refreshFoodPicker(); foodPicker:Show() end
+    end)
     imbueBtn:SetScript("OnClick", function()
-        picker:Hide()
+        picker:Hide(); foodPicker:Hide()
         if imbuePicker:IsShown() then imbuePicker:Hide() else refreshImbuePicker(); imbuePicker:Show() end
     end)
 
@@ -863,7 +938,7 @@ function HL:BuildQoLPage(parent)
         refreshMountPicker()
     end)
     mountBtn:SetScript("OnClick", function()
-        picker:Hide(); imbuePicker:Hide()
+        picker:Hide(); imbuePicker:Hide(); foodPicker:Hide()
         if mountPicker:IsShown() then mountPicker:Hide() else refreshMountPicker(); mountPicker:Show() end
     end)
 
@@ -879,6 +954,7 @@ function HL:BuildQoLPage(parent)
         picker:Hide()
         imbuePicker:Hide()
         mountPicker:Hide()
+        foodPicker:Hide()
     end)
     return page
 end
@@ -1434,6 +1510,7 @@ local HELP = {
     "|cffffff00/hl offset <pixels>|r / |cffffff00/hl scale <0.5-2>|r – move/resize the nameplate skull",
     "|cffffff00/hl minimap [on/off]|r – show/hide the minimap button",
     "|cffffff00/hl wellfed [on/off]|r – Well Fed reminder (move it in the Quality of Life tab)",
+    "|cffffff00/hl food Item Name|r – the food a click on the Well Fed reminder eats (|cffffff00clear|r to forget)",
     "|cffffff00/hl campfire [on/off]|r – campfire buff reminder (move it in the Quality of Life tab)",
     "|cffffff00/hl mount [on/off]|r – equip the riding trinket while mounted (choose it in the QoL tab > Set up)",
     "|cffffff00/hl where|r – where your friends are (those who share their location)",
@@ -1555,6 +1632,11 @@ SlashCmdList.HUENSLISTE = function(msg)
         if v then HL.settings.plateScale = math.min(2, math.max(0.5, v)) end
         HL:RefreshPlates()
         HL:Print("Nameplate scale: " .. HL.settings.plateScale)
+    elseif cmd == "food" then
+        if (rest or ""):lower() == "clear" then HL:SetWellFedFood(nil)
+        elseif rest and rest ~= "" then HL:SetWellFedFoodByName(rest) end
+        local food = HL.settings.wellFedFood
+        HL:Print("Buff food for the Well Fed click: " .. (food and food.name or "nothing chosen"))
     elseif cmd == "wellfed" then
         toggle("wellFedReminder", arg, "Well Fed reminder")
         HL:UpdateWellFed()

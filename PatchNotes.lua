@@ -3,6 +3,9 @@
 local _, HL = ...
 
 HL.PATCH_NOTES = {
+    { version = "1.14.0", notes = {
+        "Well Fed reminder is clickable: choose your buff food from your bags, then click the reminder to eat it (out of combat)",
+    } },
     { version = "1.13.0", notes = {
         "Reminders: new \"Icon\" checkbox per reminder shows only the icon instead of the full text",
     } },

@@ -1,5 +1,8 @@
 # Huens Liste
 
+## v1.14.0
+- Well Fed reminder is clickable: "Choose food" in the Quality of Life tab lists the food in your bags (other usable consumables after it). Pick your buff food once; when the reminder shows, click it to eat. The line under the text says what the click does, or that the food isn't in your bags. Out of combat only. Also `/hl food Item Name` and `/hl food clear`.
+
 ## v1.13.0
 - Reminders (Well Fed, campfire, chosen buff, weapon imbue): each row in the Quality of Life tab has a new "Icon" checkbox. With it ticked the reminder is just the pulsing icon, without the text. Click-to-apply and click-to-cast still work on the icon; the line that explains the clicks is hidden in this mode. The Move and Reset buttons are a bit narrower to make room.
 
