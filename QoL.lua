@@ -448,7 +448,8 @@ local function newReminder(opts)
         frame.hint:SetPoint("TOP", frame, "BOTTOM", 0, -2)
         frame.hint:SetText("Drag to move – click \"Lock\" in /hl when done")
 
-        local ag = frame.text:CreateAnimationGroup()
+        -- on the frame, so the pulse also works when only the icon is shown
+        local ag = frame:CreateAnimationGroup()
         ag:SetLooping("BOUNCE")
         local a = ag:CreateAnimation("Alpha")
         a:SetFromAlpha(1)
@@ -473,8 +474,25 @@ local function newReminder(opts)
         end
     end
 
+    -- "Icon only" option: just the icon, no text
+    local iconKey = opts.enabledKey:gsub("Reminder$", "Icon")
+    function r.iconOnly() return HL.settings and HL.settings[iconKey] and true or false end
+
+    local layout
+    local function applyLayout()
+        local iconOnly = r.iconOnly()
+        if layout == iconOnly then return end
+        layout = iconOnly
+        frame:SetSize(iconOnly and 44 or (opts.width or 340), 44)
+        frame.icon:ClearAllPoints()
+        frame.icon:SetSize(iconOnly and 38 or 32, iconOnly and 38 or 32)
+        if iconOnly then frame.icon:SetPoint("CENTER", 0, 0) else frame.icon:SetPoint("LEFT", 6, 0) end
+        frame.text:SetShown(not iconOnly)
+    end
+
     local function updateInner()
         if not frame or not HL.settings then return end
+        applyLayout()
         frame.icon:SetTexture(opts.icon())
 
         -- Move mode: always visible, draggable, with background and hint
@@ -637,6 +655,7 @@ local function updateBuffClicker()
             hint = (not HL.settings.buffWatchCombatOnly) and "Click to cast after combat" or nil
         end
     end
+    if buffWatch.iconOnly() and not buffWatch.unlocked then hint = nil end
     frame.hint:SetText(hint or "")
     frame.hint:SetShown(hint ~= nil)
     buffClicker.set(frame, clicks)
@@ -715,6 +734,7 @@ local function updateImbueButton()
     elseif #problems > 0 then
         hint = problems[1]:sub(1, 1):upper() .. problems[1]:sub(2)
     end
+    if weaponImbue.iconOnly() and not weaponImbue.unlocked then hint = nil end
     frame.hint:SetText(hint or "")
     frame.hint:SetShown(hint ~= nil and (weaponImbue.unlocked or weaponImbue.shown()))
 
@@ -778,6 +798,10 @@ local QOL_DEFAULTS = {
     buffWatchCombatOnly = false,
     buffWatchNoCities = false,
     weaponReminder = false,
+    wellFedIcon = false,
+    campfireIcon = false,
+    buffWatchIcon = false,
+    weaponIcon = false,
     targetButton = false,
     quietPvP = false,
     quietCities = false,

@@ -3,6 +3,9 @@
 local _, HL = ...
 
 HL.PATCH_NOTES = {
+    { version = "1.13.0", notes = {
+        "Reminders: new \"Icon\" checkbox per reminder shows only the icon instead of the full text",
+    } },
     { version = "1.12.0", notes = {
         "Riding trinket: equips the Carrot on a Stick (or a trinket you choose) while mounted and swaps back on dismount (Quality of Life, off by default)",
     } },

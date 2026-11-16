@@ -517,14 +517,14 @@ function HL:BuildQoLPage(parent)
     -- Buff reminders: Well Fed and campfire
     local section = page:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     section:SetPoint("TOPLEFT", 20, -72)
-    section:SetText("Buff reminders (on-screen text, hidden while you are dead)")
+    section:SetText("Buff reminders (on-screen text, hidden while you are dead). \"Icon\" = show only the icon.")
 
     -- One row: checkbox on the left, Move / Reset buttons on the right
     local refreshers = {}
     local function reminderRow(y, label, key, update, isUnlocked, setUnlocked, resetPos)
         makeCheck(page, label, key, { "TOPLEFT", 16, y }, update)
         local moveBtn = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
-        moveBtn:SetSize(80, 22)
+        moveBtn:SetSize(58, 22)
         moveBtn:SetPoint("TOPLEFT", 400, y - 1)
         local function refresh() moveBtn:SetText(isUnlocked() and "Lock" or "Move") end
         moveBtn:SetScript("OnClick", function()
@@ -532,10 +532,12 @@ function HL:BuildQoLPage(parent)
             refresh()
         end)
         local resetBtn = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
-        resetBtn:SetSize(80, 22)
-        resetBtn:SetPoint("LEFT", moveBtn, "RIGHT", 6, 0)
+        resetBtn:SetSize(58, 22)
+        resetBtn:SetPoint("LEFT", moveBtn, "RIGHT", 4, 0)
         resetBtn:SetText("Reset")
         resetBtn:SetScript("OnClick", resetPos)
+        -- show only the icon instead of the full text
+        makeCheck(page, "Icon", (key:gsub("Reminder$", "Icon")), { "TOPLEFT", 524, y }, update)
         refreshers[#refreshers + 1] = refresh
     end
 

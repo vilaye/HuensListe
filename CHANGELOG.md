@@ -1,5 +1,8 @@
 # Huens Liste
 
+## v1.13.0
+- Reminders (Well Fed, campfire, chosen buff, weapon imbue): each row in the Quality of Life tab has a new "Icon" checkbox. With it ticked the reminder is just the pulsing icon, without the text. Click-to-apply and click-to-cast still work on the icon; the line that explains the clicks is hidden in this mode. The Move and Reset buttons are a bit narrower to make room.
+
 ## v1.12.0
 - Riding trinket (Quality of Life tab, off by default): while you are mounted the addon equips the Carrot on a Stick, and when you dismount it puts your normal trinket back. Gear can't be swapped in combat, so if you get dismounted in a fight the swap back happens as soon as combat ends. "Set up" lets you pick another trinket and choose the upper or lower trinket slot (default: lower). Not used on flight paths, in battlegrounds or arenas. `/hl mount [on/off]`.
 
