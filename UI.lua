@@ -163,7 +163,7 @@ end
 local listPages = {} -- [list] = page
 
 local function makeFS(parent, x, w, font)
-    local f = parent:CreateFontString(nil, "OVERLAY", font)
+    local f = parent:CreateFontString(nil, "OVERLAY", HL.Font(font))
     f:SetPoint("LEFT", x, 0)
     f:SetWidth(w)
     f:SetJustifyH("LEFT")
@@ -363,7 +363,7 @@ local function makeCheck(parent, label, key, anchor, onChange)
     cb:SetPoint(unpack(anchor))
     local t = cb.Text or cb.text
     if t then t:SetText(label) else
-        t = cb:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        t = cb:CreateFontString(nil, "OVERLAY", HL.Font("GameFontHighlightSmall"))
         t:SetPoint("LEFT", cb, "RIGHT", 2, 0)
         t:SetText(label)
     end
@@ -461,14 +461,14 @@ function HL:BuildUsersPage(parent)
     page:SetAllPoints()
     usersPage = page
 
-    local header = page:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    local header = page:CreateFontString(nil, "OVERLAY", HL.Font("GameFontNormalLarge"))
     header:SetPoint("TOPLEFT", 20, -36)
     header:SetText("Addon users")
 
-    page.summary = page:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    page.summary = page:CreateFontString(nil, "OVERLAY", HL.Font("GameFontNormalSmall"))
     page.summary:SetPoint("TOPRIGHT", -16, -40)
 
-    local desc = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    local desc = page:CreateFontString(nil, "OVERLAY", HL.Font("GameFontDisableSmall"))
     desc:SetPoint("TOPLEFT", 20, -58)
     desc:SetWidth(560)
     desc:SetJustifyH("LEFT")
@@ -476,7 +476,7 @@ function HL:BuildUsersPage(parent)
 
     local headers = { { "Name", 26 }, { "Version", 181 }, { "Week", 281 }, { "Total", 331 }, { "Status", 381 }, { "Via", 481 } }
     for _, h in ipairs(headers) do
-        local fs = page:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        local fs = page:CreateFontString(nil, "OVERLAY", HL.Font("GameFontNormalSmall"))
         fs:SetPoint("TOPLEFT", h[2], -82)
         fs:SetText(h[1])
     end
@@ -510,12 +510,12 @@ function HL:BuildQoLPage(parent)
     local page = CreateFrame("Frame", nil, parent)
     page:SetAllPoints()
 
-    local header = page:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    local header = page:CreateFontString(nil, "OVERLAY", HL.Font("GameFontNormalLarge"))
     header:SetPoint("TOPLEFT", 20, -36)
     header:SetText("Quality of Life")
 
     -- Buff reminders: Well Fed and campfire
-    local section = page:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local section = page:CreateFontString(nil, "OVERLAY", HL.Font("GameFontHighlight"))
     section:SetPoint("TOPLEFT", 20, -72)
     section:SetText("Buff reminders (on-screen text, hidden while you are dead). \"Icon\" = show only the icon.")
 
@@ -584,7 +584,7 @@ function HL:BuildQoLPage(parent)
         foodPicker:SetBackdropBorderColor(0.6, 0.6, 0.6)
     end
     foodPicker:Hide()
-    foodPicker.title = foodPicker:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    foodPicker.title = foodPicker:CreateFontString(nil, "OVERLAY", HL.Font("GameFontNormalSmall"))
     foodPicker.title:SetPoint("TOPLEFT", 10, -8)
     foodPicker.title:SetWidth(280)
     foodPicker.title:SetJustifyH("LEFT")
@@ -613,7 +613,7 @@ function HL:BuildQoLPage(parent)
                 row.icon = row:CreateTexture(nil, "ARTWORK")
                 row.icon:SetSize(16, 16)
                 row.icon:SetPoint("LEFT", 0, 0)
-                row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+                row.text = row:CreateFontString(nil, "OVERLAY", HL.Font("GameFontHighlightSmall"))
                 row.text:SetPoint("LEFT", 20, 0)
                 row.text:SetWidth(258)
                 row.text:SetJustifyH("LEFT")
@@ -654,7 +654,7 @@ function HL:BuildQoLPage(parent)
         picker:SetBackdropBorderColor(0.6, 0.6, 0.6)
     end
     picker:Hide()
-    picker.title = picker:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    picker.title = picker:CreateFontString(nil, "OVERLAY", HL.Font("GameFontNormalSmall"))
     picker.title:SetPoint("TOPLEFT", 10, -8)
     picker.title:SetWidth(280)
     picker.title:SetJustifyH("LEFT")
@@ -697,7 +697,7 @@ function HL:BuildQoLPage(parent)
                 row.icon = row:CreateTexture(nil, "ARTWORK")
                 row.icon:SetSize(16, 16)
                 row.icon:SetPoint("LEFT", 0, 0)
-                row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+                row.text = row:CreateFontString(nil, "OVERLAY", HL.Font("GameFontHighlightSmall"))
                 row.text:SetPoint("LEFT", 20, 0)
                 row.text:SetWidth(258)
                 row.text:SetJustifyH("LEFT")
@@ -747,7 +747,7 @@ function HL:BuildQoLPage(parent)
         imbuePicker:SetBackdropBorderColor(0.6, 0.6, 0.6)
     end
     imbuePicker:Hide()
-    imbuePicker.title = imbuePicker:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    imbuePicker.title = imbuePicker:CreateFontString(nil, "OVERLAY", HL.Font("GameFontNormalSmall"))
     imbuePicker.title:SetPoint("TOPLEFT", 10, -8)
     imbuePicker.title:SetWidth(280)
     imbuePicker.title:SetJustifyH("LEFT")
@@ -789,7 +789,7 @@ function HL:BuildQoLPage(parent)
                 row.icon = row:CreateTexture(nil, "ARTWORK")
                 row.icon:SetSize(16, 16)
                 row.icon:SetPoint("LEFT", 0, 0)
-                row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+                row.text = row:CreateFontString(nil, "OVERLAY", HL.Font("GameFontHighlightSmall"))
                 row.text:SetPoint("LEFT", 20, 0)
                 row.text:SetWidth(258)
                 row.text:SetJustifyH("LEFT")
@@ -823,14 +823,14 @@ function HL:BuildQoLPage(parent)
     end)
 
     -- KOS target button
-    local tsection = page:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local tsection = page:CreateFontString(nil, "OVERLAY", HL.Font("GameFontHighlight"))
     tsection:SetPoint("TOPLEFT", 20, -184)
     tsection:SetText("Target nearby KOS")
 
     makeCheck(page, "Show the on-screen target button", "targetButton", { "TOPLEFT", 16, -202 },
         function() HL:UpdateTargetButton() end)
 
-    local tdesc = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    local tdesc = page:CreateFontString(nil, "OVERLAY", HL.Font("GameFontDisableSmall"))
     tdesc:SetPoint("TOPLEFT", 44, -228)
     tdesc:SetWidth(520)
     tdesc:SetJustifyH("LEFT")
@@ -850,7 +850,7 @@ function HL:BuildQoLPage(parent)
     tResetBtn:SetScript("OnClick", function() HL:ResetTargetButtonPosition() end)
 
     -- Quiet zones
-    local qsection = page:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local qsection = page:CreateFontString(nil, "OVERLAY", HL.Font("GameFontHighlight"))
     qsection:SetPoint("TOPLEFT", 20, -296)
     qsection:SetText("Quiet zones (no KOS alerts, sharing or log entries; the skull still shows)")
 
@@ -885,7 +885,7 @@ function HL:BuildQoLPage(parent)
         mountPicker:SetBackdropBorderColor(0.6, 0.6, 0.6)
     end
     mountPicker:Hide()
-    mountPicker.title = mountPicker:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    mountPicker.title = mountPicker:CreateFontString(nil, "OVERLAY", HL.Font("GameFontNormalSmall"))
     mountPicker.title:SetPoint("TOPLEFT", 10, -8)
     mountPicker.title:SetWidth(280)
     mountPicker.title:SetJustifyH("LEFT")
@@ -909,7 +909,7 @@ function HL:BuildQoLPage(parent)
                 row.icon = row:CreateTexture(nil, "ARTWORK")
                 row.icon:SetSize(16, 16)
                 row.icon:SetPoint("LEFT", 0, 0)
-                row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+                row.text = row:CreateFontString(nil, "OVERLAY", HL.Font("GameFontHighlightSmall"))
                 row.text:SetPoint("LEFT", 20, 0)
                 row.text:SetWidth(258)
                 row.text:SetJustifyH("LEFT")
@@ -980,7 +980,7 @@ local function makeSlider(parent, label, key, minV, maxV, step, anchor, fmt, onC
     s:SetThumbTexture("Interface\\Buttons\\UI-SliderBar-Button-Horizontal")
     local thumb = s:GetThumbTexture()
     if thumb then thumb:SetSize(24, 24) end
-    local text = s:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local text = s:CreateFontString(nil, "OVERLAY", HL.Font("GameFontHighlightSmall"))
     text:SetPoint("BOTTOMLEFT", s, "TOPLEFT", 0, 3)
     local function show(v) text:SetText(label .. ": |cffffd100" .. fmt:format(v) .. "|r") end
     s:SetScript("OnShow", function(self)
@@ -1019,7 +1019,7 @@ function HL:BuildOptionsPage(parent)
     page:SetAllPoints()
 
     local function title(text, x, y, font)
-        local fs = page:CreateFontString(nil, "OVERLAY", font or "GameFontHighlight")
+        local fs = page:CreateFontString(nil, "OVERLAY", HL.Font(font or "GameFontHighlight"))
         fs:SetPoint("TOPLEFT", x, y)
         fs:SetText(text)
         return fs
@@ -1056,6 +1056,21 @@ function HL:BuildOptionsPage(parent)
         function() HL:RefreshPlates() end)
     makeSlider(page, "Skull height above the nameplate", "plateOffsetY", -40, 80, 2, { "TOPLEFT", 324, -196 }, "%d",
         function() HL:RefreshPlates() end)
+
+    -- Font of the addon's own text (Allo, bundled in Fonts/)
+    local fontCheck = CreateFrame("CheckButton", nil, page, "UICheckButtonTemplate")
+    fontCheck:SetSize(24, 24)
+    fontCheck:SetPoint("TOPLEFT", 320, -238)
+    local fontLabel = fontCheck.Text or fontCheck.text
+    if not fontLabel then
+        fontLabel = fontCheck:CreateFontString(nil, "OVERLAY", HL.Font("GameFontHighlightSmall"))
+        fontLabel:SetPoint("LEFT", fontCheck, "RIGHT", 2, 0)
+    end
+    fontLabel:SetText("Use the Allo font in this addon")
+    fontCheck:SetScript("OnShow", function(self) self:SetChecked(HL.settings.font == "allo") end)
+    fontCheck:SetScript("OnClick", function(self)
+        HL:SetAddonFont(self:GetChecked() and "allo" or nil)
+    end)
 
     -- sync
     title("Sync", 20, -268)
@@ -1115,13 +1130,13 @@ local function buildListPage(parent, list)
     page.list, page.rows = list, {}
     listPages[list] = page
 
-    page.count = page:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    page.count = page:CreateFontString(nil, "OVERLAY", HL.Font("GameFontNormalSmall"))
     page.count:SetPoint("TOPRIGHT", -16, -32)
 
-    local l1 = page:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local l1 = page:CreateFontString(nil, "OVERLAY", HL.Font("GameFontNormalSmall"))
     l1:SetPoint("TOPLEFT", 20, -32)
     l1:SetText("Full name (First Last)")
-    local l2 = page:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local l2 = page:CreateFontString(nil, "OVERLAY", HL.Font("GameFontNormalSmall"))
     l2:SetPoint("TOPLEFT", 182, -32)
     l2:SetText(list == "kos" and "Reason (enemy faction only)" or "Reason (your own faction)")
 
@@ -1165,7 +1180,7 @@ local function buildListPage(parent, list)
     reasonBox:SetScript("OnEscapePressed", reasonBox.ClearFocus)
 
     -- Search
-    local searchLabel = page:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local searchLabel = page:CreateFontString(nil, "OVERLAY", HL.Font("GameFontNormalSmall"))
     searchLabel:SetPoint("TOPLEFT", 20, -77)
     searchLabel:SetText("Search:")
     local searchBox = CreateFrame("EditBox", nil, page, "InputBoxTemplate")
@@ -1178,7 +1193,7 @@ local function buildListPage(parent, list)
     end)
     searchBox:SetScript("OnEscapePressed", function(self) self:SetText(""); self:ClearFocus() end)
     searchBox:SetScript("OnEnterPressed", searchBox.ClearFocus)
-    local searchHint = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    local searchHint = page:CreateFontString(nil, "OVERLAY", HL.Font("GameFontDisableSmall"))
     searchHint:SetPoint("LEFT", searchBox, "RIGHT", 10, 0)
     searchHint:SetText("name, note, class – click a column to sort")
 
@@ -1199,7 +1214,7 @@ local function buildListPage(parent, list)
     local DESC_FIRST = { level = true, kills = true, when = true }
     for _, h in ipairs(headers) do
         local btn = CreateFrame("Button", nil, page)
-        local fs = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        local fs = btn:CreateFontString(nil, "OVERLAY", HL.Font("GameFontNormalSmall"))
         fs:SetPoint("LEFT")
         fs:SetText(h[1])
         btn:SetSize(math.max(20, fs:GetStringWidth() + 4), 14)
@@ -1265,7 +1280,7 @@ local function createMain()
     tinsert(UISpecialFrames, "HuensListeFrame")
     closeDirectly(main)
 
-    local title = main:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local title = main:CreateFontString(nil, "OVERLAY", HL.Font("GameFontHighlight"))
     title:SetPoint("TOP", 0, -5)
     title:SetText("|cffcc2222Huens Liste|r")
 
@@ -1309,7 +1324,11 @@ local function createMain()
     if PanelTemplates_SetNumTabs then PanelTemplates_SetNumTabs(main, #labels) end
     selectTab(1)
 
-    main:SetScript("OnShow", function() HL:RefreshList() end)
+    HL:AdoptFonts(main)
+    main:SetScript("OnShow", function()
+        HL:AdoptFonts(main) -- rows and popups made since the last time
+        HL:RefreshList()
+    end)
 end
 
 function HL:ToggleMain()
@@ -1322,6 +1341,7 @@ function HL:ShowTab(id)
     if not main then createMain() end
     main:Show()
     main.selectTab(id)
+    HL:AdoptFonts(main)
 end
 
 ---------------------------------------------------------------------------
@@ -1331,11 +1351,11 @@ function HL:BuildPatchNotesPage(parent)
     local page = CreateFrame("Frame", nil, parent)
     page:SetAllPoints()
 
-    local header = page:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    local header = page:CreateFontString(nil, "OVERLAY", HL.Font("GameFontNormalLarge"))
     header:SetPoint("TOPLEFT", 20, -36)
     header:SetText("Patch Notes")
 
-    local installed = page:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local installed = page:CreateFontString(nil, "OVERLAY", HL.Font("GameFontNormalSmall"))
     installed:SetPoint("TOPRIGHT", -16, -40)
 
     local scroll = CreateFrame("ScrollFrame", nil, page, "UIPanelScrollFrameTemplate")
@@ -1345,7 +1365,7 @@ function HL:BuildPatchNotesPage(parent)
     content:SetSize(540, 1)
     scroll:SetScrollChild(content)
 
-    local text = content:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local text = content:CreateFontString(nil, "OVERLAY", HL.Font("GameFontHighlight"))
     text:SetPoint("TOPLEFT", 8, -4)
     text:SetWidth(520)
     text:SetJustifyH("LEFT")
@@ -1379,7 +1399,7 @@ local function createIO()
     tinsert(UISpecialFrames, "HuensListeIOFrame")
     closeDirectly(ioFrame)
 
-    ioFrame.title = ioFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    ioFrame.title = ioFrame:CreateFontString(nil, "OVERLAY", HL.Font("GameFontHighlight"))
     ioFrame.title:SetPoint("TOP", 0, -5)
 
     local sf = CreateFrame("ScrollFrame", nil, ioFrame, "UIPanelScrollFrameTemplate")
@@ -1403,6 +1423,7 @@ local function createIO()
         HL:Import(eb:GetText())
         ioFrame:Hide()
     end)
+    HL:AdoptFonts(ioFrame)
 end
 
 function HL:ShowExport(list)
@@ -1513,6 +1534,7 @@ local HELP = {
     "|cffffff00/hl food Item Name|r – the food a click on the Well Fed reminder eats (|cffffff00clear|r to forget)",
     "|cffffff00/hl campfire [on/off]|r – campfire buff reminder (move it in the Quality of Life tab)",
     "|cffffff00/hl mount [on/off]|r – equip the riding trinket while mounted (choose it in the QoL tab > Set up)",
+    "|cffffff00/hl font [allo/default]|r – font of this addon's text",
     "|cffffff00/hl where|r – where your friends are (those who share their location)",
     "|cffffff00/hl location [on/off]|r – share my location; |cffffff00/hl map [on/off]|r – show friends on the world map",
     "|cffffff00/hl weapon [on/off]|r – reminder when your weapon has no imbue or poison",
@@ -1657,6 +1679,12 @@ SlashCmdList.HUENSLISTE = function(msg)
         toggle("mountTrinket", arg, "Riding trinket while mounted")
         if HL.settings.mountTrinket then HL:Print("Using " .. HL:MountTrinketText() .. ".") end
         HL:CheckMountTrinket()
+    elseif cmd == "font" then
+        local which = (rest or ""):lower()
+        if which == "allo" or which == "on" then HL:SetAddonFont("allo")
+        elseif which == "default" or which == "off" or which == "game" then HL:SetAddonFont(nil)
+        else HL:SetAddonFont(HL.settings.font == "allo" and nil or "allo") end
+        HL:Print("Font: " .. HL:AddonFontName())
     elseif cmd == "where" then
         HL:PrintFriendLocations()
     elseif cmd == "location" then

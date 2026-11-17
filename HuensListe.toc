@@ -11,6 +11,7 @@
 ## AddonCompartmentFuncOnLeave: HuensListe_OnAddonCompartmentLeave
 
 Core.lua
+Font.lua
 Comm.lua
 Nameplates.lua
 QoL.lua

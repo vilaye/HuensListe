@@ -440,12 +440,12 @@ local function newReminder(opts)
         frame.icon:SetSize(32, 32)
         frame.icon:SetPoint("LEFT", 6, 0)
 
-        frame.text = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+        frame.text = frame:CreateFontString(nil, "OVERLAY", HL.Font("GameFontNormalHuge"))
         frame.text:SetPoint("LEFT", frame.icon, "RIGHT", 8, 0)
         frame.text:SetTextColor(1, 0.55, 0.1)
         frame.text:SetText(type(opts.text) == "function" and opts.text() or opts.text)
 
-        frame.hint = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        frame.hint = frame:CreateFontString(nil, "OVERLAY", HL.Font("GameFontHighlightSmall"))
         frame.hint:SetPoint("TOP", frame, "BOTTOM", 0, -2)
         frame.hint:SetText("Drag to move – click \"Lock\" in /hl when done")
 

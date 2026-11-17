@@ -293,17 +293,17 @@ function HL:BuildLogPage(parent)
     page = CreateFrame("Frame", nil, parent)
     page:SetAllPoints()
 
-    local header = page:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    local header = page:CreateFontString(nil, "OVERLAY", HL.Font("GameFontNormalLarge"))
     header:SetPoint("TOPLEFT", 20, -36)
     header:SetText("Recent activity")
 
-    page.summary = page:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    page.summary = page:CreateFontString(nil, "OVERLAY", HL.Font("GameFontNormalSmall"))
     page.summary:SetPoint("TOPRIGHT", -16, -40)
 
     page.mode, page.period = "timeline", 86400
-    page.h1 = page:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    page.h1 = page:CreateFontString(nil, "OVERLAY", HL.Font("GameFontNormalSmall"))
     page.h1:SetPoint("TOPLEFT", 18, -62)
-    page.h3 = page:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    page.h3 = page:CreateFontString(nil, "OVERLAY", HL.Font("GameFontNormalSmall"))
     page.h3:SetPoint("TOPLEFT", 158, -62)
 
     local scroll = CreateFrame("ScrollFrame", nil, page, "UIPanelScrollFrameTemplate")
@@ -313,7 +313,7 @@ function HL:BuildLogPage(parent)
     content:SetSize(540, 1)
     scroll:SetScrollChild(content)
 
-    page.empty = page:CreateFontString(nil, "OVERLAY", "GameFontDisable")
+    page.empty = page:CreateFontString(nil, "OVERLAY", HL.Font("GameFontDisable"))
     page.empty:SetPoint("CENTER", 0, 10)
     page.empty:SetText("Nothing yet. Kills, deaths and sightings of KOS players show up here.")
 
