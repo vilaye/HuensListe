@@ -54,7 +54,6 @@ Getting ganked? Put the ganker on the list. Everyone in your group of friends ge
 | `/hl weapon [on/off]` | Reminder when your weapon has no imbue or poison |
 | `/hl imbue main Name` / `off Name` / `clear` | What a click on the weapon reminder applies |
 | `/hl mount [on/off]` | Equip the riding trinket (Carrot on a Stick) while mounted, swap back on dismount |
-| `/hl font [allo/default]` | Font of the addon's text: Allo or the game font |
 | `/hl where` | Where your friends are (those who share their location) |
 | `/hl location [on/off]` / `/hl map [on/off]` | Share my location / show friends on the world map |
 | `/hl food Item Name` / `clear` | The food a click on the Well Fed reminder eats |
@@ -77,7 +76,3 @@ Addons can't reach the internet, so every copy of the list syncs peer-to-peer in
 
 ## Limitations
 WoW: Forever uses Midnight's addon restrictions, so addons can no longer read the combat log. Huens Liste detects players through **nameplates, target and mouseover** and turns on enemy nameplates at login.
-
-## Credits
-
-Optional font: [Allo](https://allo.joshpuckett.me) by Josh Puckett, licensed under the SIL Open Font License 1.1 (see `Fonts/OFL.txt`). Bundled as TrueType files converted from the original OpenType release.

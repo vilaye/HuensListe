@@ -1,8 +1,5 @@
 # Huens Liste
 
-## v1.15.0
-- Optional font: "Use the Allo font in this addon" in the Options tab (off by default) switches the addon's own text to Allo by Josh Puckett: the window, lists, reminders, the nameplate marker and the map pins. The game's own UI keeps its font. Switches right away, no /reload. `/hl font [allo/default]`. Allo is under the SIL Open Font License (Fonts/OFL.txt).
-
 ## v1.14.0
 - Well Fed reminder is clickable: "Choose food" in the Quality of Life tab lists the food in your bags (other usable consumables after it). Pick your buff food once; when the reminder shows, click it to eat. The line under the text says what the click does, or that the food isn't in your bags. Out of combat only. Also `/hl food Item Name` and `/hl food clear`.
 

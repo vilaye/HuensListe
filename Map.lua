@@ -156,8 +156,10 @@ local function getPin(i, canvas)
     pin.dot = pin:CreateTexture(nil, "OVERLAY")
     pin.dot:SetAllPoints()
     pin.dot:SetTexture("Interface\\COMMON\\Indicator-Gray")
-    pin.label = pin:CreateFontString(nil, "OVERLAY", HL.Font("GameFontHighlightSmall", "OUTLINE"))
+    pin.label = pin:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     pin.label:SetPoint("LEFT", pin, "RIGHT", 1, 0)
+    local font, size = pin.label:GetFont()
+    if font then pin.label:SetFont(font, size or 10, "OUTLINE") end
     pin:SetScript("OnEnter", function(self)
         if not self.friend then return end
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
