@@ -883,6 +883,7 @@ local QOL_DEFAULTS = {
     buffWatchCombatOnly = false,
     buffWatchNoCities = false,
     weaponReminder = false,
+    lootReminder = false,
     wellFedIcon = false,
     campfireIcon = false,
     buffWatchIcon = false,
@@ -935,3 +936,76 @@ HL:On("PLAYER_REGEN_ENABLED", function() fighting = false; buffWatch.update(); w
 for _, ev in ipairs({ "ZONE_CHANGED_NEW_AREA", "ZONE_CHANGED", "ZONE_CHANGED_INDOORS" }) do
     HL:On(ev, function() buffWatch.update() end)
 end
+
+---------------------------------------------------------------------------
+-- Dungeon boss loot reminder: "LOOT THE TARNISHED REAL" for 10 seconds
+---------------------------------------------------------------------------
+local LOOT_TEXT = "LOOT THE TARNISHED REAL"
+local LOOT_ITEM = "tarnished real"
+local LOOT_SHOW = 10 -- seconds
+local lootFrame, lootToken, lastBossKill = nil, 0, 0
+
+local function createLootFrame()
+    lootFrame = CreateFrame("Frame", "HuensListeLootFrame", UIParent)
+    lootFrame:SetSize(700, 60)
+    lootFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 140)
+    lootFrame:SetFrameStrata("HIGH")
+    lootFrame.text = lootFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    lootFrame.text:SetPoint("CENTER")
+    lootFrame.text:SetScale(1.6)
+    lootFrame.text:SetTextColor(1, 0.82, 0)
+    lootFrame.text:SetText(LOOT_TEXT)
+    local ag = lootFrame:CreateAnimationGroup()
+    ag:SetLooping("BOUNCE")
+    local a = ag:CreateAnimation("Alpha")
+    a:SetFromAlpha(1)
+    a:SetToAlpha(0.4)
+    a:SetDuration(0.5)
+    lootFrame.anim = ag
+    lootFrame:Hide()
+end
+
+function HL:HideLootReminder()
+    lootToken = lootToken + 1
+    if lootFrame then lootFrame.anim:Stop(); lootFrame:Hide() end
+end
+
+function HL:ShowLootReminder()
+    if not lootFrame then createLootFrame() end
+    lootToken = lootToken + 1
+    local token = lootToken
+    lootFrame:Show()
+    lootFrame.anim:Play()
+    if self.settings.sound and PlaySound and SOUNDKIT and SOUNDKIT.RAID_WARNING then
+        pcall(PlaySound, SOUNDKIT.RAID_WARNING, "Master")
+    end
+    C_Timer.After(LOOT_SHOW, function()
+        if token == lootToken then HL:HideLootReminder() end
+    end)
+end
+
+local function inDungeon()
+    local ok, inside, kind = pcall(IsInInstance)
+    return ok and inside and not HL.IsSecret(kind) and kind == "party"
+end
+
+-- ENCOUNTER_END and BOSS_KILL both report the same kill; show it once
+local function onBossKill()
+    if not HL.settings.lootReminder or not inDungeon() then return end
+    local now = GetTime()
+    if now - lastBossKill < 15 then return end
+    lastBossKill = now
+    HL:ShowLootReminder()
+end
+
+HL:On("ENCOUNTER_END", function(_, _, _, _, success)
+    if success == 1 or success == true then onBossKill() end
+end)
+HL:On("BOSS_KILL", function() onBossKill() end)
+
+-- Looted it: the text can go early
+HL:On("CHAT_MSG_LOOT", function(msg)
+    if not lootFrame or not lootFrame:IsShown() then return end
+    if type(msg) ~= "string" or HL.IsSecret(msg) then return end
+    if msg:lower():find(LOOT_ITEM, 1, true) then HL:HideLootReminder() end
+end)

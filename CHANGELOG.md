@@ -1,5 +1,8 @@
 # Huens Liste
 
+## v1.15.0
+- Dungeon boss loot reminder (Quality of Life tab, off by default): when a boss dies in a dungeon, "LOOT THE TARNISHED REAL" shows in the middle of the screen for 10 seconds, with the raid warning sound if sounds are on. It goes away early once you loot a Tarnished Real. Only in 5-player dungeons. `/hl tarnished [on/off]`, `/hl tarnished test` to preview it. The gank option's label is shorter to make room.
+
 ## v1.14.0
 - Well Fed reminder is clickable: "Choose food" in the Quality of Life tab lists the food in your bags (other usable consumables after it). Pick your buff food once; when the reminder shows, click it to eat. The line under the text says what the click does, or that the food isn't in your bags. Out of combat only. Also `/hl food Item Name` and `/hl food clear`.
 

@@ -3,6 +3,9 @@
 local _, HL = ...
 
 HL.PATCH_NOTES = {
+    { version = "1.15.0", notes = {
+        "Dungeon boss loot reminder: \"LOOT THE TARNISHED REAL\" in the middle of the screen for 10 seconds (Quality of Life, off by default)",
+    } },
     { version = "1.14.0", notes = {
         "Well Fed reminder is clickable: choose your buff food from your bags, then click the reminder to eat it (out of combat)",
     } },

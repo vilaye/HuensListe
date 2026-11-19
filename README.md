@@ -54,6 +54,7 @@ Getting ganked? Put the ganker on the list. Everyone in your group of friends ge
 | `/hl weapon [on/off]` | Reminder when your weapon has no imbue or poison |
 | `/hl imbue main Name` / `off Name` / `clear` | What a click on the weapon reminder applies |
 | `/hl mount [on/off]` | Equip the riding trinket (Carrot on a Stick) while mounted, swap back on dismount |
+| `/hl tarnished [on/off/test]` | "LOOT THE TARNISHED REAL" for 10 seconds after a dungeon boss kill |
 | `/hl where` | Where your friends are (those who share their location) |
 | `/hl location [on/off]` / `/hl map [on/off]` | Share my location / show friends on the world map |
 | `/hl food Item Name` / `clear` | The food a click on the Well Fed reminder eats |

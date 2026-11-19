@@ -857,7 +857,8 @@ function HL:BuildQoLPage(parent)
     makeCheck(page, "Quiet in battlegrounds and arenas", "quietPvP", { "TOPLEFT", 16, -314 })
     makeCheck(page, "Quiet in cities, inns and sanctuaries", "quietCities", { "TOPLEFT", 16, -338 })
 
-    makeCheck(page, "After a gank: offer to add my killer to the KOS List (not in battlegrounds)", "gankSuggest", { "TOPLEFT", 16, -362 })
+    makeCheck(page, "After a gank: offer to add my killer to KOS", "gankSuggest", { "TOPLEFT", 16, -362 })
+    makeCheck(page, "Dungeon boss dies: \"LOOT THE TARNISHED REAL\"", "lootReminder", { "TOPLEFT", 300, -362 })
 
     -- Friends on the world map (two separate switches: you can watch without sharing)
     makeCheck(page, "Share my location with friends", "shareLocation", { "TOPLEFT", 16, -386 },
@@ -1513,6 +1514,7 @@ local HELP = {
     "|cffffff00/hl food Item Name|r – the food a click on the Well Fed reminder eats (|cffffff00clear|r to forget)",
     "|cffffff00/hl campfire [on/off]|r – campfire buff reminder (move it in the Quality of Life tab)",
     "|cffffff00/hl mount [on/off]|r – equip the riding trinket while mounted (choose it in the QoL tab > Set up)",
+    "|cffffff00/hl tarnished [on/off/test]|r – loot reminder after a dungeon boss kill",
     "|cffffff00/hl where|r – where your friends are (those who share their location)",
     "|cffffff00/hl location [on/off]|r – share my location; |cffffff00/hl map [on/off]|r – show friends on the world map",
     "|cffffff00/hl weapon [on/off]|r – reminder when your weapon has no imbue or poison",
@@ -1657,6 +1659,9 @@ SlashCmdList.HUENSLISTE = function(msg)
         toggle("mountTrinket", arg, "Riding trinket while mounted")
         if HL.settings.mountTrinket then HL:Print("Using " .. HL:MountTrinketText() .. ".") end
         HL:CheckMountTrinket()
+    elseif cmd == "tarnished" then
+        if arg == "test" then HL:ShowLootReminder()
+        else toggle("lootReminder", arg, "Tarnished Real reminder after dungeon bosses") end
     elseif cmd == "where" then
         HL:PrintFriendLocations()
     elseif cmd == "location" then
