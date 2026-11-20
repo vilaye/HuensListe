@@ -556,12 +556,49 @@ local function copyDefaults(src, dst)
     end
 end
 
+-- Settings of the Quality of Life tab are per character (HuensListeCharDB); everything
+-- else (lists, sync, alerts, Options tab) is shared by all characters (HuensListeDB).
+-- HL.settings hides the split: the code reads and writes it as one table.
+local CHAR_KEYS = {}
+for key in ([[
+    wellFedReminder wellFedIcon wellFedPos wellFedFood qolOptInDone
+    campfireReminder campfireIcon campfirePos campBuffs
+    buffWatchReminder buffWatchIcon buffWatchPos watchBuffs buffWatchCombatOnly buffWatchNoCities
+    weaponReminder weaponIcon weaponPos imbue
+    lootReminder targetButton targetButtonPos quietPvP quietCities gankSuggest
+    shareLocation showFriendsOnMap
+    mountTrinket mountTrinketItem mountTrinketSlot mountTrinketPrev
+]]):gmatch("%S+") do CHAR_KEYS[key] = true end
+HL.CHAR_KEYS = CHAR_KEYS
+
 HL:On("ADDON_LOADED", function(name)
     if name ~= ADDON then return end
     HuensListeDB = HuensListeDB or {}
     copyDefaults(DEFAULTS, HuensListeDB)
     HL.db = HuensListeDB
-    HL.settings = HL.db.settings
+    local shared = HL.db.settings
+
+    HuensListeCharDB = type(HuensListeCharDB) == "table" and HuensListeCharDB or {}
+    local char = HuensListeCharDB
+    -- Before 1.16.0 these were shared. The first character that logs in afterwards
+    -- keeps them; every other character starts with the defaults (all off).
+    if not char.qolInit then
+        char.qolInit = true
+        for key in pairs(CHAR_KEYS) do
+            if shared[key] ~= nil then char[key] = shared[key]; shared[key] = nil end
+        end
+    end
+    HL.charSettings = char
+
+    HL.settings = setmetatable({}, {
+        __index = function(_, key)
+            if CHAR_KEYS[key] then return char[key] end
+            return shared[key]
+        end,
+        __newindex = function(_, key, value)
+            if CHAR_KEYS[key] then char[key] = value else shared[key] = value end
+        end,
+    })
 end)
 
 -- Our own full name. UnitName("player") only gives the first name in Forever, so we

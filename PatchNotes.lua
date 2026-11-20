@@ -3,6 +3,9 @@
 local _, HL = ...
 
 HL.PATCH_NOTES = {
+    { version = "1.16.0", notes = {
+        "Quality of Life settings are now per character (lists, sync and the Options tab stay shared)",
+    } },
     { version = "1.15.0", notes = {
         "Dungeon boss loot reminder: \"LOOT THE TARNISHED REAL\" in the middle of the screen for 10 seconds (Quality of Life, off by default)",
     } },

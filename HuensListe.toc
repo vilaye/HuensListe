@@ -4,6 +4,7 @@
 ## Author: Artur
 ## Version: 1.15.0
 ## SavedVariables: HuensListeDB
+## SavedVariablesPerCharacter: HuensListeCharDB
 ## X-Curse-Project-ID: 1789759
 ## IconTexture: Interface\TargetingFrame\UI-RaidTargetingIcon_8
 ## AddonCompartmentFunc: HuensListe_OnAddonCompartmentClick

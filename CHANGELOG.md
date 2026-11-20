@@ -1,5 +1,8 @@
 # Huens Liste
 
+## v1.16.0
+- Quality of Life settings are per character now: reminders and their positions, chosen buffs, food, imbues, the riding trinket, the target button, quiet zones, gank suggestion, location sharing and the Tarnished Real reminder. The KOS and Swine lists, sync and the Options tab stay shared across all characters. The first character that logs in after the update keeps the settings you had; all other characters start with everything off.
+
 ## v1.15.0
 - Dungeon boss loot reminder (Quality of Life tab, off by default): when a boss dies in a dungeon, "LOOT THE TARNISHED REAL" shows in the middle of the screen for 10 seconds, with the raid warning sound if sounds are on. It goes away early once you loot a Tarnished Real. Only in 5-player dungeons. `/hl tarnished [on/off]`, `/hl tarnished test` to preview it. The gank option's label is shorter to make room.
 
